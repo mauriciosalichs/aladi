@@ -720,3 +720,95 @@ img { display: block; max-width: 100%; }
   .filter-row { flex-direction: column; }
   .filter-group { min-width: unset; }
 }
+
+/* ============================================================
+   ADVANCED FILTER ROW (below main filters)
+   ============================================================ */
+.adv-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .75rem 1.5rem;
+  justify-content: center;
+  max-width: 720px;
+  margin: .85rem auto 0;
+  padding-top: .75rem;
+  border-top: 1px solid rgba(255,255,255,.2);
+}
+.adv-check-label {
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  cursor: pointer;
+  font-size: .85rem;
+  color: rgba(255,255,255,.92);
+  font-weight: 500;
+  transition: color var(--transition);
+}
+.adv-check-label:hover { color: #fff; }
+.adv-check {
+  width: 16px;
+  height: 16px;
+  accent-color: #fff;
+  cursor: pointer;
+}
+.adv-check-text { user-select: none; }
+
+/* ============================================================
+   COLLAPSE VIEW — library-grouped availability table
+   ============================================================ */
+.collapse-table-wrap { margin-top: .25rem; }
+
+.lib-group-row { }
+.lib-group-name {
+  background: var(--brand-dark);
+  color: #fff;
+  font-size: .8rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+  padding: .5rem .85rem !important;
+}
+
+.media-badge {
+  display: inline-block;
+  font-size: .7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--gray-600);
+  background: var(--gray-100);
+  padding: .15rem .45rem;
+  border-radius: 4px;
+}
+
+.results-note {
+  display: inline-block;
+  font-size: .8rem;
+  color: var(--gray-400);
+  margin-left: .5rem;
+}
+
+/* ============================================================
+   INLINE RESERVE BUTTON (inside avail-table rows)
+   ============================================================ */
+.btn-inline-reserve {
+  display: inline-flex;
+  align-items: center;
+  padding: .3rem .75rem;
+  background: var(--green);
+  color: #fff;
+  font-size: .78rem;
+  font-weight: 700;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity var(--transition), transform var(--transition);
+}
+.btn-inline-reserve:hover {
+  opacity: .85;
+  transform: translateY(-1px);
+}
+.reserve-na {
+  color: var(--gray-400);
+  font-size: .85rem;
+}

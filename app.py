@@ -2,6 +2,7 @@
 Flask application — Aladí Library Search Portal
 """
 import os
+import re
 from functools import wraps
 
 from flask import (
@@ -15,6 +16,7 @@ from flask import (
     jsonify,
 )
 from aladi_client import AladiClient
+from config import load_config, save_config
 
 app = Flask(__name__)
 app.secret_key = os.urandom(32)
@@ -40,6 +42,54 @@ def _clear_client() -> None:
     sid = session.pop("sid", None)
     if sid:
         _clients.pop(sid, None)
+
+
+# ------------------------------------------------------------------
+# Auto-restore session from saved cookies
+# ------------------------------------------------------------------
+
+@app.before_request
+def _try_auto_login():
+    """
+    Before every request, if there is no active in-memory client, check
+    config.json for saved session cookies and try to restore the session
+    transparently.  If the cookies have expired the stored data is cleared
+    and the user is sent to the login page normally.
+    """
+    # Skip static files — no session needed
+    if request.endpoint == "static":
+        return
+
+    # Already authenticated in memory — nothing to do
+    client = _get_client()
+    if client and client.is_logged_in:
+        return
+
+    # The login/logout routes handle their own session state
+    if request.endpoint in ("login", "logout"):
+        return
+
+    cfg = load_config()
+    cookies = cfg.get("session_cookies", {})
+    patron_id = cfg.get("patron_id", "")
+    patron_name = cfg.get("patron_name", "")
+    barcode = cfg.get("barcode", "")
+
+    if not cookies or not patron_id:
+        return  # Nothing saved — let login_required redirect normally
+
+    restored = AladiClient()
+    if restored.restore_session(cookies, patron_id, patron_name, barcode):
+        _set_client(restored)
+        session["patron_name"] = patron_name
+    else:
+        # Cookies are no longer valid — wipe them so we don't retry on every request
+        save_config({
+            **cfg,
+            "session_cookies": {},
+            "patron_id": "",
+            "patron_name": "",
+        })
 
 
 def login_required(f):
@@ -79,6 +129,15 @@ def login():
         if client.login(barcode, pin):
             _set_client(client)
             session["patron_name"] = client.patron_name
+            # Persist cookies so the next app launch can skip login
+            cfg = load_config()
+            save_config({
+                **cfg,
+                "session_cookies": client.get_cookies(),
+                "patron_id": client.patron_id or "",
+                "patron_name": client.patron_name or "",
+                "barcode": barcode,
+            })
             flash(f"Welcome, {client.patron_name}!", "success")
             return redirect(url_for("search"), 303)
         else:
@@ -94,6 +153,14 @@ def logout():
         client.logout()
     _clear_client()
     session.clear()
+    # Clear persisted cookies so auto-login is not attempted on next launch
+    cfg = load_config()
+    save_config({
+        **cfg,
+        "session_cookies": {},
+        "patron_id": "",
+        "patron_name": "",
+    })
     flash("You have been logged out.", "info")
     return redirect(url_for("login"))
 
@@ -103,13 +170,40 @@ def logout():
 def search():
     client = _get_client()
     query = request.args.get("q", "").strip()
-    search_type = request.args.get("type", "X")
-    scope = request.args.get("scope", "171")
-    sort = request.args.get("sort", "D")
+    form_submitted = "q" in request.args
+
+    # Load persisted preferences; override with submitted form values when present
+    cfg = load_config()
+    if form_submitted:
+        search_type = request.args.get("type", cfg["search_type"])
+        scope = request.args.get("scope", cfg["scope"])
+        sort = request.args.get("sort", cfg["sort"])
+        available_only = request.args.get("available_only") == "1"
+        collapse_editions = request.args.get("collapse") == "1"
+    else:
+        search_type = cfg["search_type"]
+        scope = cfg["scope"]
+        sort = cfg["sort"]
+        available_only = cfg["available_only"]
+        collapse_editions = cfg["collapse_editions"]
 
     results_data = None
     if query:
-        results_data = client.search(query, search_type, scope, sort)
+        save_config({
+            "search_type": search_type,
+            "scope": scope,
+            "sort": sort,
+            "available_only": available_only,
+            "collapse_editions": collapse_editions,
+        })
+        if collapse_editions:
+            results_data = client.collapse_search(
+                query, search_type, scope, sort, available_only
+            )
+        else:
+            results_data = client.search(
+                query, search_type, scope, sort, available_only=available_only
+            )
 
     return render_template(
         "search.html",
@@ -117,9 +211,11 @@ def search():
         search_type=search_type,
         scope=scope,
         sort=sort,
+        available_only=available_only,
+        collapse_editions=collapse_editions,
         results=results_data,
         search_types=AladiClient.SEARCH_TYPES,
-        scopes=AladiClient.SCOPES,
+        scope_groups=AladiClient.SCOPE_GROUPS,
         patron_name=session.get("patron_name", ""),
     )
 
@@ -128,7 +224,6 @@ def search():
 @login_required
 def book_detail(bib_id: str):
     client = _get_client()
-    import re
     if not re.match(r"^[a-zA-Z0-9]+$", bib_id):
         flash("Invalid book ID.", "danger")
         return redirect(url_for("search"))
@@ -149,7 +244,6 @@ def book_detail(bib_id: str):
 @login_required
 def reserve(bib_id: str):
     """Show the hold/reserve form for a specific book."""
-    import re
     if not re.match(r"^[a-zA-Z0-9]+$", bib_id):
         flash("Invalid book ID.", "danger")
         return redirect(url_for("search"))
@@ -175,7 +269,6 @@ def reserve(bib_id: str):
 @login_required
 def reserve_confirm(bib_id: str):
     """Place the hold after the user selects a copy."""
-    import re
     if not re.match(r"^[a-zA-Z0-9]+$", bib_id):
         flash("Invalid book ID.", "danger")
         return redirect(url_for("search"))

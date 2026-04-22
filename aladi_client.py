@@ -3,6 +3,7 @@ Aladi library catalog scraper.
 Handles authentication and data extraction from aladi.diba.cat
 """
 import re
+from concurrent.futures import ThreadPoolExecutor
 import requests
 from bs4 import BeautifulSoup
 
@@ -89,6 +90,49 @@ class AladiClient:
     def is_logged_in(self) -> bool:
         return self.patron_id is not None
 
+    def get_cookies(self) -> dict:
+        """Return current session cookies as a plain dict for persistence."""
+        return dict(self.session.cookies)
+
+    def restore_session(
+        self,
+        cookies: dict,
+        patron_id: str,
+        patron_name: str,
+        barcode: str = "",
+    ) -> bool:
+        """
+        Restore a previously saved session from stored cookies.
+        Verifies the session is still active by hitting the patron page.
+        Returns True if the session is valid, False if it has expired.
+        """
+        if not cookies or not patron_id:
+            return False
+
+        for name, value in cookies.items():
+            self.session.cookies.set(name, value)
+
+        self.patron_id = patron_id
+        self.patron_name = patron_name
+        self._barcode = barcode
+
+        # Verify the server still honours these cookies
+        try:
+            url = f"{BASE_URL}/patroninfo~S{SCOPE}/{patron_id}/items"
+            resp = self.session.get(url, timeout=10, allow_redirects=True)
+            # A valid session keeps us on the patroninfo page; an expired one
+            # redirects to / or /patroninfo* (the login form).
+            if resp.status_code == 200 and "/patroninfo~S" in resp.url:
+                return True
+        except Exception:
+            pass
+
+        # Session expired — reset state
+        self.patron_id = None
+        self.patron_name = None
+        self._barcode = ""
+        return False
+
     # ------------------------------------------------------------------
     # Search
     # ------------------------------------------------------------------
@@ -122,6 +166,33 @@ class AladiClient:
         "170": "Vallès Oriental",
     }
 
+    # Ordered groups for <optgroup> rendering in the search form.
+    SCOPE_GROUPS: list[tuple[str, list[tuple[str, str]]]] = [
+        ("All catalog", [
+            ("171", "All catalog"),
+        ]),
+        ("Collections", [
+            ("174", "Music"),
+            ("175", "Films"),
+            ("173", "Comics / Amb vinyetes"),
+            ("172", "Online resources"),
+            ("176", "Audiobooks / Large print / Braille"),
+        ]),
+        ("By region (comarca)", [
+            ("160", "Alt Penedès"),
+            ("161", "Anoia"),
+            ("162", "Bages i Moianès"),
+            ("163", "Baix Llobregat"),
+            ("164", "Barcelonès"),
+            ("165", "Berguedà"),
+            ("166", "Garraf"),
+            ("167", "Maresme"),
+            ("168", "Osona"),
+            ("169", "Vallès Occidental"),
+            ("170", "Vallès Oriental"),
+        ]),
+    ]
+
     def search(
         self,
         query: str,
@@ -129,6 +200,7 @@ class AladiClient:
         scope: str = "171",
         sort: str = "D",
         page: int = 1,
+        available_only: bool = False,
     ) -> dict:
         """
         Search the catalog.
@@ -147,7 +219,88 @@ class AladiClient:
             "SORT": sort,
         }
         resp = self.session.get(self.SEARCH_URL, params=params, timeout=15)
-        return self._parse_results(resp.text, query, search_type, scope, page)
+        data = self._parse_results(resp.text, query, search_type, scope, page)
+        if available_only:
+            data["results"] = [
+                r for r in data["results"]
+                if r.get("availability") and any(
+                    item["status"] == "Available" for item in r["availability"]
+                )
+            ]
+        return data
+
+    def collapse_search(
+        self,
+        query: str,
+        search_type: str = "X",
+        scope: str = "171",
+        sort: str = "D",
+        available_only: bool = False,
+    ) -> dict:
+        """
+        Search and aggregate all physical copies from all result editions
+        into a single flat list, sorted by library, each with an item_id for
+        inline reservation.
+
+        Returns a dict with keys: query, search_type, scope, total_results,
+        editions_fetched, copies, grouped_copies, collapsed=True.
+        """
+        results = self.search(query, search_type, scope, sort)
+        books = [
+            b for b in results["results"]
+            if b.get("bib_id") and not b.get("is_browse_entry")
+        ]
+
+        def _fetch(book: dict) -> list[dict]:
+            try:
+                form = self.get_hold_form(book["bib_id"])
+                if not form:
+                    return []
+                out = []
+                for copy in form["copies"]:
+                    out.append({
+                        "library": copy["location"],
+                        "edition_title": book["title"],
+                        "bib_id": book["bib_id"],
+                        "item_id": copy["item_id"],
+                        "call_number": copy["call_number"],
+                        "status": copy["status"],
+                        "notes": copy["notes"],
+                        "media_type": book.get("media_type", ""),
+                    })
+                return out
+            except Exception:
+                return []
+
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            all_lists = list(pool.map(_fetch, books))
+
+        all_copies: list[dict] = []
+        for lst in all_lists:
+            all_copies.extend(lst)
+
+        # Sort by library name, then available-first within each library
+        all_copies.sort(key=lambda c: (c["library"].lower(), c["status"] != "Available"))
+
+        if available_only:
+            all_copies = [c for c in all_copies if c["status"] == "Available"]
+
+        # Group by library for easy template rendering
+        grouped: dict[str, list] = {}
+        for copy in all_copies:
+            grouped.setdefault(copy["library"], []).append(copy)
+        grouped_copies = list(grouped.items())
+
+        return {
+            "query": query,
+            "search_type": search_type,
+            "scope": scope,
+            "total_results": results["total"],
+            "editions_fetched": len(books),
+            "copies": all_copies,
+            "grouped_copies": grouped_copies,
+            "collapsed": True,
+        }
 
     def _parse_results(
         self, html: str, query: str, search_type: str, scope: str, page: int
@@ -352,12 +505,30 @@ class AladiClient:
     # ------------------------------------------------------------------
 
     def get_book(self, bib_id: str) -> dict | None:
-        """Fetch a full bibliographic record."""
+        """Fetch a full bibliographic record, including item_ids for inline reserve."""
         url = f"{BASE_URL}/record={bib_id}~S{SCOPE}"
         resp = self.session.get(url, timeout=15)
         if resp.status_code != 200:
             return None
-        return self._parse_book_detail(resp.text, bib_id)
+        book = self._parse_book_detail(resp.text, bib_id)
+
+        # Enrich availability with item_ids from the hold form so the template
+        # can render inline reserve buttons without a separate page hop.
+        hold_data = self.get_hold_form(bib_id)
+        if hold_data:
+            # Index by a normalised (location, call_number) key
+            item_map: dict[tuple, str] = {}
+            for copy in hold_data["copies"]:
+                key = (copy["location"][:30].lower(), copy["call_number"][:12].lower())
+                item_map[key] = copy["item_id"]
+            for avail in book["availability"]:
+                key = (avail["location"][:30].lower(), avail["call_number"][:12].lower())
+                avail["item_id"] = item_map.get(key, "")
+        else:
+            for avail in book["availability"]:
+                avail["item_id"] = ""
+
+        return book
 
     def _parse_book_detail(self, html: str, bib_id: str) -> dict:
         soup = BeautifulSoup(html, "lxml")

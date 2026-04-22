@@ -44,11 +44,6 @@
         rel="noopener"
         class="btn btn--outline btn--full"
       >Ver en Aladí ↗</a>
-
-      <a
-        href="{{ url_for('reserve', bib_id=book.bib_id) }}"
-        class="btn btn--reserve btn--full"
-      >📋 Reservar este título</a>
     </aside>
 
     <!-- MAIN DETAIL COLUMN -->
@@ -101,6 +96,7 @@
                   <th>Call Number</th>
                   <th>Status</th>
                   <th>Notes</th>
+                  <th>Reserve</th>
                 </tr>
               </thead>
               <tbody>
@@ -120,6 +116,16 @@
                       {% endif %}
                     </td>
                     <td>{{ item.notes }}</td>
+                    <td>
+                      {% if item.get('item_id') %}
+                        <form method="POST" action="{{ url_for('reserve_confirm', bib_id=book.bib_id) }}">
+                          <input type="hidden" name="item_id" value="{{ item.item_id }}">
+                          <button type="submit" class="btn-inline-reserve">Reservar</button>
+                        </form>
+                      {% else %}
+                        <span class="reserve-na">—</span>
+                      {% endif %}
+                    </td>
                   </tr>
                 {% endfor %}
               </tbody>
