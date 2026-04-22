@@ -67,7 +67,7 @@ class AladiClient:
 
         self.patron_id = m.group(1)
         self._barcode = barcode
-        soup = BeautifulSoup(resp.text, "lxml")
+        soup = BeautifulSoup(resp.text, "html.parser")
 
         # Extract name from logged-in message
         msg = soup.find("span", class_="loggedInMessage")
@@ -305,7 +305,7 @@ class AladiClient:
     def _parse_results(
         self, html: str, query: str, search_type: str, scope: str, page: int
     ) -> dict:
-        soup = BeautifulSoup(html, "lxml")
+        soup = BeautifulSoup(html, "html.parser")
 
         # Total results count
         total = 0
@@ -531,7 +531,7 @@ class AladiClient:
         return book
 
     def _parse_book_detail(self, html: str, bib_id: str) -> dict:
-        soup = BeautifulSoup(html, "lxml")
+        soup = BeautifulSoup(html, "html.parser")
 
         # Cover image
         cover_url = ""
@@ -599,7 +599,7 @@ class AladiClient:
         return self._parse_patron_items(resp.text)
 
     def _parse_patron_items(self, html: str) -> list[dict]:
-        soup = BeautifulSoup(html, "lxml")
+        soup = BeautifulSoup(html, "html.parser")
         items = []
         # Actual class is 'patFunc', not 'patFuncTable'
         table = soup.find("table", class_="patFunc")
@@ -651,7 +651,7 @@ class AladiClient:
         return self._parse_patron_holds(resp.text)
 
     def _parse_patron_holds(self, html: str) -> list[dict]:
-        soup = BeautifulSoup(html, "lxml")
+        soup = BeautifulSoup(html, "html.parser")
         items = []
         # Actual class is 'patFunc'
         table = soup.find("table", class_="patFunc")
@@ -697,7 +697,7 @@ class AladiClient:
         resp = self.session.get(url, timeout=15)
         if resp.status_code != 200:
             return None
-        soup = BeautifulSoup(resp.text, "lxml")
+        soup = BeautifulSoup(resp.text, "html.parser")
 
         form = soup.find("form", method=re.compile(r"post", re.I))
         if not form:
@@ -777,7 +777,7 @@ class AladiClient:
             allow_redirects=True,
             timeout=15,
         )
-        soup = BeautifulSoup(resp.text, "lxml")
+        soup = BeautifulSoup(resp.text, "html.parser")
         # Check for success/failure messages in the page
         main = soup.find("div", class_="pageContentColumn")
         text = main.get_text(strip=True) if main else resp.text[:500]

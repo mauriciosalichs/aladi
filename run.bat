@@ -64,14 +64,30 @@ if not exist "!VENV_DIR!\Scripts\python.exe" (
 )
 
 :: ─────────────────────────────────────────────────────────────────────
-:: Step 3 — Install / upgrade required packages
-::   • flask       — web framework
-::   • requests    — HTTP client used by aladi_client.py
-::   • beautifulsoup4 — HTML scraper used by aladi_client.py
+:: Step 3 — Bootstrap & upgrade pip, then install required packages
+::   Using `python -m ensurepip` + `python -m pip` (recommended on
+::   Windows) to guarantee pip is present even on stripped installs.
+::   Packages:
+::   • flask          — web framework
+::   • requests       — HTTP client (aladi_client.py)
+::   • beautifulsoup4 — HTML scraper (aladi_client.py)
+::   • lxml           — fast XML/HTML parser (optional but preferred)
 :: ─────────────────────────────────────────────────────────────────────
-echo  [SETUP] Installing packages (flask, requests, beautifulsoup4) ...
-"!VENV_DIR!\Scripts\pip.exe" install --quiet --upgrade pip
-"!VENV_DIR!\Scripts\pip.exe" install --quiet --upgrade flask requests beautifulsoup4
+echo  [SETUP] Bootstrapping pip inside the virtual environment ...
+"!VENV_DIR!\Scripts\python.exe" -m ensurepip --upgrade
+if errorlevel 1 (
+    echo  [WARN]  ensurepip returned non-zero ^(may be harmless^).
+)
+"!VENV_DIR!\Scripts\python.exe" -m pip install --quiet --upgrade pip
+if errorlevel 1 (
+    echo  [ERROR] Could not upgrade pip.
+    goto :fatal
+)
+echo  [OK]    pip upgraded.
+
+echo  [SETUP] Installing packages (flask, requests, beautifulsoup4, lxml) ...
+"!VENV_DIR!\Scripts\python.exe" -m pip install --quiet --upgrade ^
+    flask requests beautifulsoup4 lxml
 if errorlevel 1 (
     echo  [ERROR] Package installation failed.
     goto :fatal
