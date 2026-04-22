@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block title %}Search — Aladí Library Portal{% endblock %}
+
+{% block content %}
+<div class="search-page">
+
+  <!-- SEARCH BAR -->
+  <section class="search-hero">
+    <h1 class="search-hero__title">Find a book, film, or more</h1>
+    <form method="GET" action="{{ url_for('search') }}" class="search-form" id="searchForm">
+      <div class="search-bar">
+        <input
+          type="text"
+          name="q"
+          id="q"
+          class="search-input"
+          placeholder="Search the catalog…"
+          value="{{ query }}"
+          autofocus
+        />
+        <button type="submit" class="btn btn--search">Search</button>
+      </div>
+
+      <!-- FILTERS ROW -->
+      <div class="filter-row">
+        <div class="filter-group">
+          <label for="type" class="filter-label">Search by</label>
+          <select name="type" id="type" class="filter-select">
+            {% for code, label in search_types.items() %}
+              <option value="{{ code }}" {% if code == search_type %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label for="scope" class="filter-label">Library / Collection</label>
+          <select name="scope" id="scope" class="filter-select">
+            {% for code, label in scopes.items() %}
+              <option value="{{ code }}" {% if code == scope %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label for="sort" class="filter-label">Sort by</label>
+          <select name="sort" id="sort" class="filter-select">
+            <option value="D" {% if sort == 'D' %}selected{% endif %}>Relevance</option>
+            <option value="t" {% if sort == 't' %}selected{% endif %}>Title</option>
+            <option value="a" {% if sort == 'a' %}selected{% endif %}>Author</option>
+            <option value="c" {% if sort == 'c' %}selected{% endif %}>Year</option>
+            <option value="r" {% if sort == 'r' %}selected{% endif %}>Year (newest)</option>
+          </select>
+        </div>
+      </div>
+    </form>
+  </section>
+
+  <!-- RESULTS -->
+  {% if results is not none %}
+    <section class="results-section">
+      {% if results.total == 0 %}
+        <div class="empty-state">
+          <div class="empty-icon">🔍</div>
+          <h2>No results found</h2>
+          <p>Try different keywords or change the search type.</p>
+        </div>
+      {% else %}
+        <div class="results-header">
+          <span class="results-count">
+            <strong>{{ results.total }}</strong> result{{ 's' if results.total != 1 else '' }} for
+            <em>"{{ results.query }}"</em>
+          </span>
+        </div>
+
+        <div class="book-grid">
+          {% for book in results.results %}
+            <article class="book-card">
+              {% if book.get('is_browse_entry') %}
+                <a href="{{ book.record_url }}" target="_blank" rel="noopener" class="book-card__link">
+              {% else %}
+                <a href="{{ url_for('book_detail', bib_id=book.bib_id) }}" class="book-card__link">
+              {% endif %}
+                <div class="book-card__cover">
+                  {% if book.cover_url %}
+                    <img
+                      src="{{ book.cover_url }}"
+                      alt="{{ book.title }}"
+                      class="book-card__img"
+                      loading="lazy"
+                      onerror="this.parentElement.innerHTML='<div class=book-card__no-cover>📖</div>'"
+                    />
+                  {% else %}
+                    <div class="book-card__no-cover">
+                      {% if book.get('is_browse_entry') %}🔗{% else %}📖{% endif %}
+                    </div>
+                  {% endif %}
+
+                  {% if book.media_type %}
+                    <span class="book-card__badge">{{ book.media_type }}</span>
+                  {% endif %}
+                </div>
+
+                <div class="book-card__body">
+                  <h3 class="book-card__title">{{ book.title or '(Untitled)' }}</h3>
+                  {% if book.author %}
+                    <p class="book-card__author">{{ book.author }}</p>
+                  {% endif %}
+                  {% if book.pub %}
+                    <p class="book-card__pub">{{ book.pub }}</p>
+                  {% elif book.year %}
+                    <p class="book-card__pub">{{ book.year }}</p>
+                  {% endif %}
+
+                  <!-- Availability pill -->
+                  {% if book.availability %}
+                    {% set available = book.availability | selectattr('status', 'equalto', 'Available') | list %}
+                    {% if available %}
+                      <span class="avail-pill avail-pill--green">✓ Available ({{ available | length }})</span>
+                    {% else %}
+                      <span class="avail-pill avail-pill--orange">⏳ On loan</span>
+                    {% endif %}
+                  {% elif book.get('is_browse_entry') %}
+                    <span class="avail-pill avail-pill--blue">↗ View on Aladí</span>
+                  {% endif %}
+                </div>
+              </a>
+            </article>
+          {% endfor %}
+        </div>
+
+        <!-- PAGINATION NOTE -->
+        {% if results.total > 12 %}
+          <div class="pagination-note">
+            Showing first 12 of {{ results.total }} results.
+            For more results, refine your search.
+          </div>
+        {% endif %}
+      {% endif %}
+    </section>
+  {% else %}
+    <!-- Landing state -->
+    <div class="landing-tips">
+      <h2 class="tips-title">Search tips</h2>
+      <div class="tips-grid">
+        <div class="tip-card">
+          <div class="tip-icon">🔤</div>
+          <h3>Keyword search</h3>
+          <p>Search across title, author, and subject at once.</p>
+        </div>
+        <div class="tip-card">
+          <div class="tip-icon">📖</div>
+          <h3>By title</h3>
+          <p>Find a specific book by its exact title.</p>
+        </div>
+        <div class="tip-card">
+          <div class="tip-icon">✍️</div>
+          <h3>By author</h3>
+          <p>Discover all works by your favourite author.</p>
+        </div>
+        <div class="tip-card">
+          <div class="tip-icon">🏷️</div>
+          <h3>By subject</h3>
+          <p>Explore a topic or genre.</p>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

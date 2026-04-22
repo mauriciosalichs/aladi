@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}My Account — Aladí Library Portal{% endblock %}
+
+{% block content %}
+<div class="account-page">
+  <h1 class="page-title">Mi Cuenta</h1>
+  <p class="page-subtitle">Bienvenido/a, <strong>{{ patron_name }}</strong></p>
+
+  <!-- CHECKED OUT ITEMS -->
+  <section class="account-section">
+    <h2 class="account-section__title">📚 Préstamos actuales</h2>
+    {% if items %}
+      <div class="avail-table-wrap">
+        <table class="avail-table">
+          <thead>
+            <tr>
+              <th>Título</th>
+              <th>Código de barras</th>
+              <th>Fecha de devolución</th>
+              <th>Renovaciones</th>
+              <th>Signatura</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in items %}
+              <tr>
+                <td>
+                  {% if item.bib_id %}
+                    <a href="{{ url_for('book_detail', bib_id=item.bib_id) }}" class="table-link">{{ item.title }}</a>
+                  {% else %}
+                    {{ item.title }}
+                  {% endif %}
+                </td>
+                <td>{{ item.barcode }}</td>
+                <td>
+                  {% if item.due_date %}
+                    <span class="status-pill status-pill--orange">📅 {{ item.due_date }}</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if item.renewed %}
+                    <span class="chip chip--year">{{ item.renewed }}</span>
+                  {% else %}—{% endif %}
+                </td>
+                <td>{{ item.call_number }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="empty-state empty-state--small">
+        <div class="empty-icon">📭</div>
+        <p>No tienes préstamos activos.</p>
+      </div>
+    {% endif %}
+  </section>
+
+  <!-- HOLDS / REQUESTS -->
+  <section class="account-section">
+    <h2 class="account-section__title">📋 Reservas</h2>
+    {% if holds %}
+      <div class="avail-table-wrap">
+        <table class="avail-table">
+          <thead>
+            <tr>
+              <th>Título</th>
+              <th>Estado</th>
+              <th>Biblioteca de recogida</th>
+              <th>Cancelar antes de</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for hold in holds %}
+              <tr>
+                <td>
+                  {% if hold.bib_id %}
+                    <a href="{{ url_for('book_detail', bib_id=hold.bib_id) }}" class="table-link">{{ hold.title }}</a>
+                  {% else %}
+                    {{ hold.title }}
+                  {% endif %}
+                </td>
+                <td>
+                  {% if 'Ready' in hold.status or 'pick up' in hold.status %}
+                    <span class="status-pill status-pill--green">✓ {{ hold.status }}</span>
+                  {% elif 'Transit' in hold.status %}
+                    <span class="status-pill status-pill--blue">🚚 {{ hold.status }}</span>
+                  {% else %}
+                    <span class="status-pill status-pill--orange">⏳ {{ hold.status }}</span>
+                  {% endif %}
+                </td>
+                <td>{{ hold.pickup }}</td>
+                <td>{{ hold.cancel_by }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="empty-state empty-state--small">
+        <div class="empty-icon">📋</div>
+        <p>No tienes reservas pendientes.</p>
+      </div>
+    {% endif %}
+  </section>
+
+  <div class="account-actions">
+    <a href="{{ url_for('search') }}" class="btn btn--primary">🔍 Buscar en el catálogo</a>
+    <a
+      href="https://aladi.diba.cat/patroninfo~S171/{{ patron_id }}/items"
+      target="_blank"
+      rel="noopener"
+      class="btn btn--outline"
+    >Ver cuenta completa en Aladí ↗</a>
+  </div>
+</div>
+{% endblock %}

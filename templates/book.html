@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}{{ book.fields.get('Title', 'Book Detail') }} — Aladí Library Portal{% endblock %}
+
+{% block content %}
+<div class="detail-page">
+
+  <!-- BACK LINK -->
+  <a href="javascript:history.back()" class="back-link">← Back to results</a>
+
+  <div class="detail-layout">
+
+    <!-- COVER + ACTIONS COLUMN -->
+    <aside class="detail-aside">
+      <div class="detail-cover">
+        {% if book.cover_url %}
+          <img
+            src="{{ book.cover_url }}"
+            alt="Cover"
+            class="detail-cover__img"
+            onerror="this.parentElement.innerHTML='<div class=detail-cover__placeholder>📖</div>'"
+          />
+        {% else %}
+          <div class="detail-cover__placeholder">📖</div>
+        {% endif %}
+      </div>
+
+      <!-- Quick availability summary -->
+      <div class="detail-avail-summary">
+        {% if book.availability %}
+          {% set avail_count = book.availability | selectattr('status', 'equalto', 'Available') | list | length %}
+          {% if avail_count > 0 %}
+            <div class="avail-badge avail-badge--green">✓ {{ avail_count }} cop{{ 'y' if avail_count == 1 else 'ies' }} available</div>
+          {% else %}
+            <div class="avail-badge avail-badge--orange">⏳ All copies on loan</div>
+          {% endif %}
+        {% else %}
+          <div class="avail-badge avail-badge--gray">Availability unknown</div>
+        {% endif %}
+      </div>
+
+      <a
+        href="https://aladi.diba.cat/record={{ book.bib_id }}~S171"
+        target="_blank"
+        rel="noopener"
+        class="btn btn--outline btn--full"
+      >Ver en Aladí ↗</a>
+
+      <a
+        href="{{ url_for('reserve', bib_id=book.bib_id) }}"
+        class="btn btn--reserve btn--full"
+      >📋 Reservar este título</a>
+    </aside>
+
+    <!-- MAIN DETAIL COLUMN -->
+    <div class="detail-main">
+      {% set title = book.fields.get('Title', '') %}
+      <h1 class="detail-title">{{ title or '(Untitled)' }}</h1>
+
+      <!-- Key metadata chips -->
+      <div class="detail-chips">
+        {% if book.fields.get('Author/Artist') %}
+          <span class="chip chip--author">✍️ {{ book.fields['Author/Artist'] }}</span>
+        {% endif %}
+        {% if book.fields.get('Publication') %}
+          <span class="chip chip--year">📅 {{ book.fields['Publication'] }}</span>
+        {% endif %}
+      </div>
+
+      <!-- Summary -->
+      {% if book.fields.get('Summary') %}
+        <div class="detail-summary">
+          <h2 class="detail-section-title">Summary</h2>
+          <p>{{ book.fields['Summary'] }}</p>
+        </div>
+      {% endif %}
+
+      <!-- All bibliographic fields -->
+      <div class="detail-biblio">
+        <h2 class="detail-section-title">Details</h2>
+        <div class="biblio-table">
+          {% for entry in book.all_fields %}
+            {% if entry.value and entry.value not in ['Rating'] %}
+              <div class="biblio-row">
+                <dt class="biblio-label">{{ entry.label or '↳' }}</dt>
+                <dd class="biblio-value">{{ entry.value }}</dd>
+              </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Availability table -->
+      {% if book.availability %}
+        <div class="detail-availability">
+          <h2 class="detail-section-title">Copies &amp; Availability</h2>
+          <div class="avail-table-wrap">
+            <table class="avail-table">
+              <thead>
+                <tr>
+                  <th>Location</th>
+                  <th>Call Number</th>
+                  <th>Status</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for item in book.availability %}
+                  <tr class="avail-row {% if item.status == 'Available' %}avail-row--green{% elif 'DUE' in item.status or 'loan' in item.status.lower() %}avail-row--red{% else %}avail-row--gray{% endif %}">
+                    <td>{{ item.location }}</td>
+                    <td>{{ item.call_number }}</td>
+                    <td>
+                      {% if item.status == 'Available' %}
+                        <span class="status-pill status-pill--green">✓ Available</span>
+                      {% elif 'DUE' in item.status %}
+                        <span class="status-pill status-pill--orange">📅 {{ item.status }}</span>
+                      {% elif 'Transit' in item.status %}
+                        <span class="status-pill status-pill--blue">🚚 In Transit</span>
+                      {% else %}
+                        <span class="status-pill status-pill--gray">{{ item.status }}</span>
+                      {% endif %}
+                    </td>
+                    <td>{{ item.notes }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
