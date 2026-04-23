@@ -539,70 +539,38 @@ function parsePatronHolds(html) {
     const statusTd = row.querySelector('td.patFuncStatus');
     const pickupTd = row.querySelector('td.patFuncPickup');
 
-    // ── ROBUST hold_id extraction ──────────────────────────────────
-    // Strategy 1: Look in patFuncCancel column for checkbox
-    // Strategy 2: Look for any input with value matching h\d+ in the entire row
-    // Strategy 3: Look for hidden inputs with name containing 'cancel'
-    // Strategy 4: Look in name attribute of any input
-    // Strategy 5: Regex the full row HTML for hold record pattern
+    // ── hold_id extraction ────────────────────────────────────────
+    // The cancel checkbox in III Millennium encodes the item ID in its NAME:
+    //   name="name_pfmark_cancel{itemId}"  (e.g. name_pfmark_canceli23891110x04)
+    // There is no meaningful value attribute — the token IS the name suffix.
     let holdId = '';
     let cancelBy = '';
 
-    // Strategy 1: Standard cancel column
+    // Primary: find any checkbox whose name starts with 'name_pfmark_cancel'
+    for (const inp of row.querySelectorAll('input[type="checkbox"], input[type="CHECKBOX"]')) {
+      const name = inp.getAttribute('name') || '';
+      const match = name.match(/name_pfmark_cancel(.+)/i);
+      if (match) {
+        holdId = match[1]; // e.g. "i23891110x04"
+        break;
+      }
+    }
+
+    // Fallback: any input whose name contains 'cancel' and has a non-empty name suffix
+    if (!holdId) {
+      for (const inp of row.querySelectorAll('input')) {
+        const name = inp.getAttribute('name') || '';
+        const match = name.match(/cancel[_]?(.+)/i);
+        if (match && match[1]) { holdId = match[1]; break; }
+      }
+    }
+
+    // Extract cancel-by date from the cancel column text
     const cancelTd = row.querySelector('td.patFuncCancel');
     if (cancelTd) {
-      const chk = cancelTd.querySelector('input[type="checkbox"], input[type="CHECKBOX"]');
-      if (chk) {
-        holdId = chk.value || chk.getAttribute('value') || '';
-      }
-      // If not found, try any input in the cancel cell
-      if (!holdId) {
-        for (const inp of cancelTd.querySelectorAll('input')) {
-          const val = inp.value || inp.getAttribute('value') || '';
-          if (/^h\d+$/i.test(val)) { holdId = val; break; }
-        }
-      }
-      // Extract cancel-by date (remove inputs first for clean text)
       const cancelTdClone = cancelTd.cloneNode(true);
       cancelTdClone.querySelectorAll('input').forEach(el => el.remove());
       cancelBy = cancelTdClone.textContent.trim();
-    }
-
-    // Strategy 2: Search entire row for any input with h\d+ value
-    if (!holdId) {
-      for (const inp of row.querySelectorAll('input')) {
-        const val = inp.value || inp.getAttribute('value') || '';
-        if (/^h\d+$/i.test(val)) { holdId = val; break; }
-        const name = inp.name || inp.getAttribute('name') || '';
-        if (/^h\d+$/i.test(name)) { holdId = name; break; }
-      }
-    }
-
-    // Strategy 3: Look for cancel-related names
-    if (!holdId) {
-      for (const inp of row.querySelectorAll('input[name*="cancel"], input[name*="Cancel"]')) {
-        const val = inp.value || inp.getAttribute('value') || '';
-        if (val && /^h?\d+$/.test(val)) {
-          holdId = val.startsWith('h') ? val : 'h' + val;
-          break;
-        }
-      }
-    }
-
-    // Strategy 4: Regex the raw HTML of the row
-    if (!holdId) {
-      const rowHtml = row.innerHTML || '';
-      const htmlMatch = rowHtml.match(/value\s*=\s*["']?(h\d+)["']?/i);
-      if (htmlMatch) holdId = htmlMatch[1];
-    }
-
-    // Strategy 5: Look for hold ID in any href containing "holds"
-    if (!holdId) {
-      for (const a of row.querySelectorAll('a[href*="hold"]')) {
-        const href = a.getAttribute('href') || '';
-        const hm = href.match(/(h\d+)/);
-        if (hm) { holdId = hm[1]; break; }
-      }
     }
 
     items.push({
@@ -618,12 +586,38 @@ function parsePatronHolds(html) {
 }
 
 export async function cancelHold(holdId) {
+  // holdId is the item token from the checkbox name suffix, e.g. "i23891110x04"
   const cfg = loadConfig();
   if (!cfg.patron_id || !holdId) return false;
-  const url = `${BASE_URL}/patroninfo~S${SCOPE}/${cfg.patron_id}/holds`;
-  const body = `cancelHold%5B%5D=${encodeURIComponent(holdId)}&updateHoldsAccount=${encodeURIComponent('Cancel Marked')}`;
-  const resp = await proxyFetch(url, { method: 'POST', body });
-  return resp.status === 200;
+  const holdsUrl = `${BASE_URL}/patroninfo~S${SCOPE}/${cfg.patron_id}/holds`;
+
+  // Step 1: POST checkbox=on + holdpagecmd set to requestUpdateHoldsSome
+  // Mirrors: check the box → click "Cancel·lar seleccionats" (submitHold JS sets
+  // holdpagecmd.name = 'requestUpdateHoldsSome', holdpagecmd.value = 'requestUpdateHoldsSome')
+  const checkboxName = `name_pfmark_cancel${holdId}`;
+  const pickupName   = `name_pfpickup_loc${holdId}`;
+  const step1Body = [
+    `${encodeURIComponent(checkboxName)}=on`,
+    `requestUpdateHoldsSome=requestUpdateHoldsSome`,
+    `SORT=D`,
+    `extended=0`,
+    `currentsortorder=current_pickup`,
+  ].join('&');
+  const step1 = await proxyFetch(holdsUrl, { method: 'POST', body: step1Body });
+  if (step1.status !== 200) return false;
+
+  // Step 2: Confirm — the confirmation page posts back to the same URL.
+  // Server pre-fills name_pfmark_cancel{holdId}=on and name_pfpickup_loc{holdId}=''
+  // as hidden inputs; we replay them plus the "SÍ" submit button.
+  const confirmUrl = step1.finalUrl || holdsUrl;
+  const step2Body = [
+    `${encodeURIComponent(pickupName)}=`,
+    `${encodeURIComponent(checkboxName)}=on`,
+    `currentsortorder=current_pickup`,
+    `updateholdssome=${encodeURIComponent('S\u00CD')}`,
+  ].join('&');
+  const step2 = await proxyFetch(confirmUrl, { method: 'POST', body: step2Body });
+  return step2.status === 200;
 }
 
 // ── Hold / Reserve ─────────────────────────────────────────────────

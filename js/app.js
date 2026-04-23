@@ -624,8 +624,7 @@ async function renderAccount() {
     ]);
 
     let html = `<div class="account-page">
-      <h1 class="page-title">${esc(t('account_heading'))}</h1>
-      <p class="page-subtitle">${esc(t('account_welcome'))} <strong>${esc(cfg.patron_name)}</strong></p>`;
+      <h1 class="page-title">${esc(t('account_heading'))}</h1>`;
 
     // Loans
     html += `<section class="account-section"><h2 class="account-section__title">${esc(t('account_loans'))}</h2>`;
@@ -699,7 +698,8 @@ async function renderAccount() {
     document.querySelectorAll('.btn-cancel-hold').forEach(btn => {
       btn.addEventListener('click', async () => {
         const holdId = btn.dataset.hold;
-        if (!holdId || !/^h\d+$/i.test(holdId)) {
+        console.log('Cancel hold', holdId);
+        if (!holdId) {
           flash(t('flash_cancel_hold_invalid'), 'danger');
           return;
         }
