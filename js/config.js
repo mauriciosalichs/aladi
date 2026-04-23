@@ -9,7 +9,7 @@ const DEFAULTS = {
   sort: 'D',
   available_only: false,
   collapse_editions: false,
-  proxy_url: 'https://YOUR_WORKER_NAME.YOUR_SUBDOMAIN.workers.dev/',
+  proxy_url: 'https://aladi.msalichs92.workers.dev/',
   session_cookies: {},
   patron_id: '',
   patron_name: '',
