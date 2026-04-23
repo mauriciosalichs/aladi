@@ -6,22 +6,22 @@ This repository contains a **personal research and educational project** created
 
 ## What the software does
 
-The software provides a personal, locally-running web interface that:
+The software provides a static single-page web application (deployed on GitHub Pages) that:
 
 1. Authenticates with the [aladi.diba.cat](https://aladi.diba.cat) public library catalog using credentials supplied by the operator (their own library card barcode and PIN).
-2. Sends search queries to the catalog's public OPAC and presents the results in a reformatted UI.
+2. Sends search queries to the catalog's public OPAC (via a CORS proxy) and presents the results in a reformatted UI.
 3. Displays the **operator's own** patron account information (checked-out items, holds).
-4. Places hold requests through the standard patron self-service interface, on behalf of the authenticated patron.
+4. Places hold requests and cancels holds through the standard patron self-service interface, on behalf of the authenticated patron.
 
 ## What the software does NOT do
 
 - It does **not** access any other patron's data. Authentication is required, and the server enforces account isolation.
 - It does **not** bypass any authentication or authorisation mechanism. All requests are made through the official login endpoint using valid patron credentials.
 - It does **not** scrape, copy, redistribute, or republish catalog data in bulk or in any persistent form. Results are fetched on demand and displayed only to the logged-in patron.
-- It does **not** store the patron's PIN. Only the session cookies returned by the server after a successful login may be saved locally, solely to avoid repeated credential entry.
+- It does **not** store the patron's PIN. Only the session cookies returned by the server after a successful login may be saved in the browser's `localStorage`, solely to avoid repeated credential entry.
 - It does **not** modify any catalog data.
-- It does **not** communicate with any server other than `aladi.diba.cat`. No analytics, telemetry, or third-party services are involved.
-- It is **not** exposed to the public internet. It runs exclusively on `localhost` and is intended for use only on the operator's own machine.
+- It does **not** communicate with any server other than `aladi.diba.cat` (via a CORS proxy deployed by the operator). No analytics, telemetry, or third-party services are involved.
+- It is a **static site** deployed on GitHub Pages. The CORS proxy is a simple relay deployed by the operator, restricted to `aladi.diba.cat` only.
 
 ## Intended audience
 

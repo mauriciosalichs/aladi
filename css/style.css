@@ -736,14 +736,171 @@ img { display: block; max-width: 100%; }
 }
 
 /* ============================================================
-   RESPONSIVE
+   HAMBURGER MENU (mobile nav)
+   ============================================================ */
+.nav-hamburger {
+  display: none;
+  flex-direction: column;
+  gap: 5px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: .45rem .5rem;
+  border-radius: var(--radius-sm);
+  transition: background var(--transition);
+}
+.nav-hamburger:hover { background: rgba(255,255,255,.15); }
+.nav-hamburger span {
+  display: block;
+  width: 22px;
+  height: 2px;
+  background: #fff;
+  border-radius: 2px;
+  transition: transform .25s ease, opacity .25s ease;
+}
+.nav-hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+.nav-hamburger.open span:nth-child(2) { opacity: 0; transform: scaleX(0); }
+.nav-hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+/* ============================================================
+   RESPONSIVE — Tablet (≤ 768px)
+   ============================================================ */
+@media (max-width: 768px) {
+  .detail-layout {
+    grid-template-columns: 1fr;
+  }
+  .detail-aside {
+    position: static;
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+  }
+  .detail-cover {
+    flex: 0 0 120px;
+    aspect-ratio: 2/3;
+    margin-bottom: 0;
+  }
+  .detail-avail-summary { flex: 1; }
+
+  .tips-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ============================================================
+   RESPONSIVE — Phone (≤ 600px)
    ============================================================ */
 @media (max-width: 600px) {
-  .book-grid { grid-template-columns: repeat(2, 1fr); }
+  /* --- Nav mobile --- */
+  .nav-hamburger { display: flex; }
+
+  .nav-links {
+    display: none;
+    position: absolute;
+    top: 60px;
+    left: 0;
+    right: 0;
+    background: var(--brand-dark);
+    flex-direction: column;
+    padding: .75rem 1rem 1rem;
+    gap: .1rem;
+    box-shadow: 0 4px 16px rgba(0,0,0,.3);
+    z-index: 99;
+  }
+  .nav-links.open { display: flex; }
+  .nav-inner { position: relative; }
+
+  .nav-link {
+    padding: .65rem .85rem;
+    border-radius: var(--radius-sm);
+    font-size: .95rem;
+  }
+  .nav-user {
+    padding: .4rem .85rem;
+    border-left: none;
+    border-top: 1px solid rgba(255,255,255,.2);
+    margin-top: .3rem;
+    margin-left: 0;
+  }
+  .lang-switcher {
+    margin-left: 0;
+    padding-left: 0;
+    border-left: none;
+    border-top: 1px solid rgba(255,255,255,.2);
+    margin-top: .3rem;
+    padding-top: .6rem;
+  }
+
+  /* --- Layout --- */
+  .main { padding: 1rem .75rem; }
+
+  /* --- Search --- */
+  .search-hero { padding: 1.5rem 1rem; border-radius: var(--radius-sm); }
+  .search-hero__title { font-size: 1.2rem; }
   .search-bar { flex-direction: column; }
+  .search-input { font-size: .95rem; }
   .btn--search { width: 100%; justify-content: center; }
   .filter-row { flex-direction: column; }
   .filter-group { min-width: unset; }
+  .adv-filter-row { flex-direction: column; gap: .5rem; }
+
+  /* --- Book grid --- */
+  .book-grid { grid-template-columns: repeat(2, 1fr); gap: .75rem; }
+  .book-card__body { padding: .6rem; }
+  .book-card__title { font-size: .82rem; }
+
+  /* --- Tables: horizontal scroll --- */
+  .avail-table-wrap,
+  .copies-table-wrap {
+    -webkit-overflow-scrolling: touch;
+  }
+  .avail-table,
+  .copies-table {
+    min-width: 500px;
+  }
+
+  /* --- Detail page --- */
+  .detail-aside {
+    flex-direction: column;
+    align-items: center;
+  }
+  .detail-cover { flex: none; width: 140px; }
+  .detail-title { font-size: 1.25rem; }
+
+  /* --- Tips --- */
+  .tips-grid { grid-template-columns: 1fr 1fr; gap: .75rem; }
+  .tip-card { padding: 1rem .85rem; }
+
+  /* --- Account --- */
+  .account-actions { flex-direction: column; }
+  .account-actions .btn { width: 100%; justify-content: center; }
+
+  /* --- Reserve --- */
+  .reserve-header { padding: 1.25rem 1rem; }
+  .reserve-title { font-size: 1.15rem; }
+  .reserve-actions { flex-direction: column; }
+  .reserve-actions .btn { width: 100%; justify-content: center; }
+
+  /* --- Login / Settings card --- */
+  .login-wrap { padding: 1rem .75rem; align-items: flex-start; padding-top: 2rem; }
+  .login-card { padding: 1.75rem 1.25rem; }
+}
+
+/* ============================================================
+   RESPONSIVE — Very small phone (≤ 400px)
+   ============================================================ */
+@media (max-width: 400px) {
+  .book-grid { grid-template-columns: 1fr 1fr; gap: .5rem; }
+  .book-card__title { font-size: .78rem; -webkit-line-clamp: 2; }
+  .book-card__author { display: none; }
+
+  /* Stack filter row completely */
+  .adv-filter-row { gap: .4rem; }
+
+  /* Single column tips */
+  .tips-grid { grid-template-columns: 1fr; }
+
+  /* Shrink chips / pills */
+  .status-pill { font-size: .72rem; padding: .15rem .45rem; }
+  .avail-pill  { font-size: .68rem; }
 }
 
 /* ============================================================

@@ -15,41 +15,61 @@ This is a personal research/school project. External contributions are welcome b
    - Circumvent any authentication or rate-limiting mechanism.
    - Require storing the PIN or any password in any form.
 
+## Project structure
+
+The project is a static single-page application (SPA) deployed on GitHub Pages:
+
+```
+docs/                   # GitHub Pages root
+├── index.html          # SPA shell
+├── css/style.css       # All styles
+└── js/
+    ├── app.js          # SPA routing & views
+    ├── aladi-client.js # HTTP client (fetch + DOMParser)
+    ├── config.js       # localStorage management
+    └── translations.js # EN/ES translations
+proxy-worker.js         # Cloudflare Worker CORS proxy
+```
+
+Legacy Python/Flask files (`app.py`, `aladi_client.py`, `config.py`, `templates/`, `static/`) are kept for reference but are no longer the active codebase.
+
 ## Development setup
 
 ```bash
 git clone https://github.com/YOUR_USERNAME/aladi-portal.git
-cd aladi-portal
-python3 -m venv .venv
-source .venv/bin/activate
-pip install flask requests beautifulsoup4 lxml
-python app.py
+cd aladi-portal/docs
+python3 -m http.server 8000
+# Open http://localhost:8000
 ```
+
+You also need a CORS proxy (Cloudflare Worker). See [README.md](README.md#cors-proxy-setup-cloudflare-worker) for instructions.
 
 ## Code style
 
-- Follow PEP 8 for Python.
-- Use f-strings; avoid % and `.format()` for new code.
-- Keep HTML/CSS/JS changes minimal and consistent with the existing design system (see `static/css/style.css` CSS variables).
-- No external JavaScript frameworks — the project intentionally uses plain HTML with minimal JS.
+- Use ES modules (`import`/`export`) for JavaScript.
+- Use `const`/`let` — never `var`.
+- Keep HTML rendering in template literals inside `app.js` view functions.
+- Keep CSS changes minimal and consistent with the existing design system (see `docs/css/style.css` CSS variables).
+- No external JavaScript frameworks — the project intentionally uses plain HTML with minimal vanilla JS.
 
 ## Sensitive data
 
-- **Never commit `config.json`** — it is listed in `.gitignore` for a reason.
-- **Never include real barcodes, PINs, session cookies, or patron IDs** in issues, PRs, or commit messages.
+- **Never commit real barcodes, PINs, session cookies, or patron IDs** in issues, PRs, or commit messages.
+- `localStorage` stores session data in the browser — do not screenshot or share it.
 - When sharing logs or screenshots for bug reports, redact personal information.
 
 ## Pull request checklist
 
-- [ ] `python -m py_compile app.py aladi_client.py config.py` passes with no errors.
-- [ ] The app starts and the login page renders: `python app.py` → visit `http://localhost:5000`.
-- [ ] `config.json` is not tracked by git (`git status` shows it as ignored or untracked).
+- [ ] `docs/index.html` loads without errors in the browser console.
+- [ ] All views render correctly: login, settings, search, book detail, account, reserve.
 - [ ] No credentials or personal data in the diff.
+- [ ] Translations are added for both `en` and `es` if any new strings are introduced.
+- [ ] The CORS proxy worker still passes basic tests if modified.
 
 ## Reporting issues
 
 Open a GitHub Issue. Describe:
 1. What you expected to happen.
-2. What actually happened (include any stack trace, redacted of personal info).
+2. What actually happened (include any browser console errors, redacted of personal info).
 3. Steps to reproduce.
-4. Python version (`python --version`) and OS.
+4. Browser version and OS.
