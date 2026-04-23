@@ -5,7 +5,7 @@
 <div class="detail-page">
 
   <!-- BACK LINK -->
-  <a href="javascript:history.back()" class="back-link">← Back to results</a>
+  <a href="javascript:history.back()" class="back-link">{{ t.book_back }}</a>
 
   <div class="detail-layout">
 
@@ -29,12 +29,12 @@
         {% if book.availability %}
           {% set avail_count = book.availability | selectattr('status', 'equalto', 'Available') | list | length %}
           {% if avail_count > 0 %}
-            <div class="avail-badge avail-badge--green">✓ {{ avail_count }} cop{{ 'y' if avail_count == 1 else 'ies' }} available</div>
+            <div class="avail-badge avail-badge--green">✓ {{ avail_count }} {{ t.results_copies if avail_count != 1 else t.results_copy }} {{ t.status_available }}</div>
           {% else %}
-            <div class="avail-badge avail-badge--orange">⏳ All copies on loan</div>
+            <div class="avail-badge avail-badge--orange">⏳ {{ t.status_all_on_loan }}</div>
           {% endif %}
         {% else %}
-          <div class="avail-badge avail-badge--gray">Availability unknown</div>
+          <div class="avail-badge avail-badge--gray">{{ t.status_unknown }}</div>
         {% endif %}
       </div>
 
@@ -43,13 +43,13 @@
         target="_blank"
         rel="noopener"
         class="btn btn--outline btn--full"
-      >Ver en Aladí ↗</a>
+      >{{ t.book_aladi_btn }}</a>
     </aside>
 
     <!-- MAIN DETAIL COLUMN -->
     <div class="detail-main">
       {% set title = book.fields.get('Title', '') %}
-      <h1 class="detail-title">{{ title or '(Untitled)' }}</h1>
+      <h1 class="detail-title">{{ title or t.book_untitled }}</h1>
 
       <!-- Key metadata chips -->
       <div class="detail-chips">
@@ -64,14 +64,14 @@
       <!-- Summary -->
       {% if book.fields.get('Summary') %}
         <div class="detail-summary">
-          <h2 class="detail-section-title">Summary</h2>
+          <h2 class="detail-section-title">{{ t.book_summary }}</h2>
           <p>{{ book.fields['Summary'] }}</p>
         </div>
       {% endif %}
 
       <!-- All bibliographic fields -->
       <div class="detail-biblio">
-        <h2 class="detail-section-title">Details</h2>
+        <h2 class="detail-section-title">{{ t.book_details }}</h2>
         <div class="biblio-table">
           {% for entry in book.all_fields %}
             {% if entry.value and entry.value not in ['Rating'] %}
@@ -87,16 +87,16 @@
       <!-- Availability table -->
       {% if book.availability %}
         <div class="detail-availability">
-          <h2 class="detail-section-title">Copies &amp; Availability</h2>
+          <h2 class="detail-section-title">{{ t.book_availability }}</h2>
           <div class="avail-table-wrap">
             <table class="avail-table">
               <thead>
                 <tr>
-                  <th>Location</th>
-                  <th>Call Number</th>
-                  <th>Status</th>
-                  <th>Notes</th>
-                  <th>Reserve</th>
+                  <th>{{ t.col_location }}</th>
+                  <th>{{ t.col_callno }}</th>
+                  <th>{{ t.col_status }}</th>
+                  <th>{{ t.col_notes }}</th>
+                  <th>{{ t.col_reserve }}</th>
                 </tr>
               </thead>
               <tbody>
@@ -106,11 +106,11 @@
                     <td>{{ item.call_number }}</td>
                     <td>
                       {% if item.status == 'Available' %}
-                        <span class="status-pill status-pill--green">✓ Available</span>
+                        <span class="status-pill status-pill--green">✓ {{ t.status_available }}</span>
                       {% elif 'DUE' in item.status %}
                         <span class="status-pill status-pill--orange">📅 {{ item.status }}</span>
                       {% elif 'Transit' in item.status %}
-                        <span class="status-pill status-pill--blue">🚚 In Transit</span>
+                        <span class="status-pill status-pill--blue">🚚 {{ t.status_in_transit }}</span>
                       {% else %}
                         <span class="status-pill status-pill--gray">{{ item.status }}</span>
                       {% endif %}
@@ -120,7 +120,7 @@
                       {% if item.get('item_id') %}
                         <form method="POST" action="{{ url_for('reserve_confirm', bib_id=book.bib_id) }}">
                           <input type="hidden" name="item_id" value="{{ item.item_id }}">
-                          <button type="submit" class="btn-inline-reserve">Reservar</button>
+                          <button type="submit" class="btn-inline-reserve">{{ t.col_reserve }}</button>
                         </form>
                       {% else %}
                         <span class="reserve-na">—</span>

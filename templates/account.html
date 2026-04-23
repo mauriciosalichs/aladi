@@ -1,24 +1,24 @@
 {% extends "base.html" %}
-{% block title %}My Account — Aladí Library Portal{% endblock %}
+{% block title %}{{ t.account_page_title }}{% endblock %}
 
 {% block content %}
 <div class="account-page">
-  <h1 class="page-title">Mi Cuenta</h1>
-  <p class="page-subtitle">Bienvenido/a, <strong>{{ patron_name }}</strong></p>
+  <h1 class="page-title">{{ t.account_heading }}</h1>
+  <p class="page-subtitle">{{ t.account_welcome }} <strong>{{ patron_name }}</strong></p>
 
   <!-- CHECKED OUT ITEMS -->
   <section class="account-section">
-    <h2 class="account-section__title">📚 Préstamos actuales</h2>
+    <h2 class="account-section__title">{{ t.account_loans }}</h2>
     {% if items %}
       <div class="avail-table-wrap">
         <table class="avail-table">
           <thead>
             <tr>
-              <th>Título</th>
-              <th>Código de barras</th>
-              <th>Fecha de devolución</th>
-              <th>Renovaciones</th>
-              <th>Signatura</th>
+              <th>{{ t.account_col_title }}</th>
+              <th>{{ t.account_col_barcode }}</th>
+              <th>{{ t.account_col_due }}</th>
+              <th>{{ t.account_col_renewals }}</th>
+              <th>{{ t.account_col_callno }}</th>
             </tr>
           </thead>
           <tbody>
@@ -51,23 +51,24 @@
     {% else %}
       <div class="empty-state empty-state--small">
         <div class="empty-icon">📭</div>
-        <p>No tienes préstamos activos.</p>
+        <p>{{ t.account_no_loans }}</p>
       </div>
     {% endif %}
   </section>
 
   <!-- HOLDS / REQUESTS -->
   <section class="account-section">
-    <h2 class="account-section__title">📋 Reservas</h2>
+    <h2 class="account-section__title">{{ t.account_holds }}</h2>
     {% if holds %}
       <div class="avail-table-wrap">
         <table class="avail-table">
           <thead>
             <tr>
-              <th>Título</th>
-              <th>Estado</th>
-              <th>Biblioteca de recogida</th>
-              <th>Cancelar antes de</th>
+              <th>{{ t.account_col_title }}</th>
+              <th>{{ t.account_col_status }}</th>
+              <th>{{ t.account_col_pickup }}</th>
+              <th>{{ t.account_col_cancelby }}</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -91,6 +92,14 @@
                 </td>
                 <td>{{ hold.pickup }}</td>
                 <td>{{ hold.cancel_by }}</td>
+                <td>
+                  {% if hold.hold_id %}
+                    <form method="POST" action="{{ url_for('cancel_hold') }}">
+                      <input type="hidden" name="hold_id" value="{{ hold.hold_id }}">
+                      <button type="submit" class="btn-cancel-hold">{{ t.account_cancel_hold_btn }}</button>
+                    </form>
+                  {% endif %}
+                </td>
               </tr>
             {% endfor %}
           </tbody>
@@ -99,19 +108,19 @@
     {% else %}
       <div class="empty-state empty-state--small">
         <div class="empty-icon">📋</div>
-        <p>No tienes reservas pendientes.</p>
+        <p>{{ t.account_no_holds }}</p>
       </div>
     {% endif %}
   </section>
 
   <div class="account-actions">
-    <a href="{{ url_for('search') }}" class="btn btn--primary">🔍 Buscar en el catálogo</a>
+    <a href="{{ url_for('search') }}" class="btn btn--primary">{{ t.account_search_btn }}</a>
     <a
       href="https://aladi.diba.cat/patroninfo~S171/{{ patron_id }}/items"
       target="_blank"
       rel="noopener"
       class="btn btn--outline"
-    >Ver cuenta completa en Aladí ↗</a>
+    >{{ t.account_aladi_btn }}</a>
   </div>
 </div>
 {% endblock %}

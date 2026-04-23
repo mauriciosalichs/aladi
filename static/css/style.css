@@ -99,6 +99,31 @@ img { display: block; max-width: 100%; }
   border-left: 1px solid rgba(255,255,255,.3);
 }
 
+/* ---- Language switcher ---- */
+.lang-switcher {
+  display: flex;
+  align-items: center;
+  gap: .2rem;
+  margin-left: .75rem;
+  padding-left: .75rem;
+  border-left: 1px solid rgba(255,255,255,.3);
+}
+.lang-btn {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,.4);
+  color: rgba(255,255,255,.75);
+  border-radius: var(--radius-sm);
+  padding: .2rem .5rem;
+  font-size: .78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition), border-color var(--transition);
+  font-family: inherit;
+  letter-spacing: .03em;
+}
+.lang-btn:hover { background: rgba(255,255,255,.18); color: #fff; border-color: rgba(255,255,255,.7); }
+.lang-btn--active { background: rgba(255,255,255,.25); color: #fff; border-color: rgba(255,255,255,.85); }
+
 /* ---- Flash Messages ---- */
 .flash-container {
   max-width: 1280px;
@@ -807,6 +832,25 @@ img { display: block; max-width: 100%; }
 .btn-inline-reserve:hover {
   opacity: .85;
   transform: translateY(-1px);
+}
+.btn-cancel-hold {
+  display: inline-flex;
+  align-items: center;
+  padding: .3rem .7rem;
+  background: transparent;
+  color: var(--red);
+  font-size: .78rem;
+  font-weight: 700;
+  border: 1px solid var(--red);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--transition), color var(--transition);
+  font-family: inherit;
+}
+.btn-cancel-hold:hover {
+  background: var(--red);
+  color: #fff;
 }
 .reserve-na {
   color: var(--gray-400);

@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% block title %}Search — Aladí Library Portal{% endblock %}
+{% block title %}{{ t.search_page_title }}{% endblock %}
 
 {% block content %}
 <div class="search-page">
 
   <!-- SEARCH BAR -->
   <section class="search-hero">
-    <h1 class="search-hero__title">Find a book, film, or more</h1>
+    <h1 class="search-hero__title">{{ t.search_hero }}</h1>
     <form method="GET" action="{{ url_for('search') }}" class="search-form" id="searchForm">
       <div class="search-bar">
         <input
@@ -14,17 +14,17 @@
           name="q"
           id="q"
           class="search-input"
-          placeholder="Search the catalog…"
+          placeholder="{{ t.search_placeholder }}"
           value="{{ query }}"
           autofocus
         />
-        <button type="submit" class="btn btn--search">Search</button>
+        <button type="submit" class="btn btn--search">{{ t.search_btn }}</button>
       </div>
 
       <!-- MAIN FILTERS ROW -->
       <div class="filter-row">
         <div class="filter-group">
-          <label for="type" class="filter-label">Search by</label>
+          <label for="type" class="filter-label">{{ t.search_by_label }}</label>
           <select name="type" id="type" class="filter-select">
             {% for code, label in search_types.items() %}
               <option value="{{ code }}" {% if code == search_type %}selected{% endif %}>{{ label }}</option>
@@ -33,7 +33,7 @@
         </div>
 
         <div class="filter-group">
-          <label for="scope" class="filter-label">Library / Collection</label>
+          <label for="scope" class="filter-label">{{ t.search_library_label }}</label>
           <select name="scope" id="scope" class="filter-select">
             {% for group_name, group_scopes in scope_groups %}
               <optgroup label="{{ group_name }}">
@@ -46,13 +46,13 @@
         </div>
 
         <div class="filter-group">
-          <label for="sort" class="filter-label">Sort by</label>
+          <label for="sort" class="filter-label">{{ t.search_sort_label }}</label>
           <select name="sort" id="sort" class="filter-select">
-            <option value="D" {% if sort == 'D' %}selected{% endif %}>Relevance</option>
-            <option value="t" {% if sort == 't' %}selected{% endif %}>Title</option>
-            <option value="a" {% if sort == 'a' %}selected{% endif %}>Author</option>
-            <option value="c" {% if sort == 'c' %}selected{% endif %}>Year</option>
-            <option value="r" {% if sort == 'r' %}selected{% endif %}>Year (newest)</option>
+            <option value="D" {% if sort == 'D' %}selected{% endif %}>{{ t.sort_relevance }}</option>
+            <option value="t" {% if sort == 't' %}selected{% endif %}>{{ t.sort_title }}</option>
+            <option value="a" {% if sort == 'a' %}selected{% endif %}>{{ t.sort_author }}</option>
+            <option value="c" {% if sort == 'c' %}selected{% endif %}>{{ t.sort_year }}</option>
+            <option value="r" {% if sort == 'r' %}selected{% endif %}>{{ t.sort_year_newest }}</option>
           </select>
         </div>
       </div>
@@ -62,12 +62,12 @@
         <label class="adv-check-label">
           <input type="checkbox" name="available_only" value="1" id="available_only" class="adv-check"
             {% if available_only %}checked{% endif %}>
-          <span class="adv-check-text">✓ Only available copies</span>
+          <span class="adv-check-text">{{ t.filter_available_only }}</span>
         </label>
         <label class="adv-check-label">
           <input type="checkbox" name="collapse" value="1" id="collapse" class="adv-check"
             {% if collapse_editions %}checked{% endif %}>
-          <span class="adv-check-text">🗂 Collapse editions — show all libraries</span>
+          <span class="adv-check-text">{{ t.filter_collapse }}</span>
         </label>
       </div>
     </form>
@@ -84,12 +84,14 @@
         {% set n_copies = results.copies | length %}
         <div class="results-header">
           <span class="results-count">
-            <strong>{{ results.editions_fetched }}</strong> edition{{ 's' if results.editions_fetched != 1 else '' }} of
+            <strong>{{ results.editions_fetched }}</strong> {{ t.results_editions if results.editions_fetched != 1 else t.results_edition }}
+            {{ t.results_of }}
             <em>"{{ results.query }}"</em> —
-            <strong>{{ n_copies }}</strong> cop{{ 'ies' if n_copies != 1 else 'y' }} at
-            <strong>{{ n_libs }}</strong> librar{{ 'ies' if n_libs != 1 else 'y' }}
+            <strong>{{ n_copies }}</strong> {{ t.results_copies if n_copies != 1 else t.results_copy }}
+            {{ t.results_at }}
+            <strong>{{ n_libs }}</strong> {{ t.results_libraries if n_libs != 1 else t.results_library }}
             {% if results.total_results > 12 %}
-              <small class="results-note">(first 12 editions · {{ results.total_results }} total)</small>
+              <small class="results-note">({{ t.results_first_12 }} · {{ results.total_results }} {{ t.results_total }})</small>
             {% endif %}
           </span>
         </div>
@@ -97,20 +99,20 @@
         {% if n_copies == 0 %}
           <div class="empty-state">
             <div class="empty-icon">📭</div>
-            <h2>No copies found</h2>
-            <p>Try unchecking "Only available copies" or broadening the search.</p>
+            <h2>{{ t.results_no_copies_title }}</h2>
+            <p>{{ t.results_no_copies_hint }}</p>
           </div>
         {% else %}
           <div class="avail-table-wrap collapse-table-wrap">
             <table class="avail-table">
               <thead>
                 <tr>
-                  <th>Library</th>
-                  <th>Edition / Title</th>
-                  <th>Type</th>
-                  <th>Call #</th>
-                  <th>Status</th>
-                  <th>Reserve</th>
+                  <th>{{ t.col_library }}</th>
+                  <th>{{ t.col_edition }}</th>
+                  <th>{{ t.col_type }}</th>
+                  <th>{{ t.col_callno }}</th>
+                  <th>{{ t.col_status }}</th>
+                  <th>{{ t.col_reserve }}</th>
                 </tr>
               </thead>
               <tbody>
@@ -130,11 +132,11 @@
                       <td>{{ copy.call_number }}</td>
                       <td>
                         {% if copy.status == 'Available' %}
-                          <span class="status-pill status-pill--green">✓ Available</span>
+                          <span class="status-pill status-pill--green">✓ {{ t.status_available }}</span>
                         {% elif 'DUE' in copy.status %}
                           <span class="status-pill status-pill--orange">📅 {{ copy.status }}</span>
                         {% elif 'Transit' in copy.status %}
-                          <span class="status-pill status-pill--blue">🚚 In Transit</span>
+                          <span class="status-pill status-pill--blue">🚚 {{ t.status_in_transit }}</span>
                         {% else %}
                           <span class="status-pill status-pill--gray">{{ copy.status }}</span>
                         {% endif %}
@@ -143,7 +145,7 @@
                         {% if copy.item_id %}
                           <form method="POST" action="{{ url_for('reserve_confirm', bib_id=copy.bib_id) }}">
                             <input type="hidden" name="item_id" value="{{ copy.item_id }}">
-                            <button type="submit" class="btn-inline-reserve">Reservar</button>
+                            <button type="submit" class="btn-inline-reserve">{{ t.col_reserve }}</button>
                           </form>
                         {% else %}
                           <span class="reserve-na">—</span>
@@ -160,8 +162,8 @@
       {% elif results.total == 0 %}
         <div class="empty-state">
           <div class="empty-icon">🔍</div>
-          <h2>No results found</h2>
-          <p>Try different keywords or change the search type.</p>
+          <h2>{{ t.results_none_title }}</h2>
+          <p>{{ t.results_none_hint }}</p>
         </div>
       {% else %}
         {# ======================================================
@@ -169,7 +171,8 @@
            ====================================================== #}
         <div class="results-header">
           <span class="results-count">
-            <strong>{{ results.total }}</strong> result{{ 's' if results.total != 1 else '' }} for
+            <strong>{{ results.total }}</strong> {{ t.results_results if results.total != 1 else t.results_result }}
+            {{ t.results_for }}
             <em>"{{ results.query }}"</em>
           </span>
         </div>
@@ -203,7 +206,7 @@
                 </div>
 
                 <div class="book-card__body">
-                  <h3 class="book-card__title">{{ book.title or '(Untitled)' }}</h3>
+                  <h3 class="book-card__title">{{ book.title or t.book_untitled }}</h3>
                   {% if book.author %}
                     <p class="book-card__author">{{ book.author }}</p>
                   {% endif %}
@@ -217,12 +220,12 @@
                   {% if book.availability %}
                     {% set available = book.availability | selectattr('status', 'equalto', 'Available') | list %}
                     {% if available %}
-                      <span class="avail-pill avail-pill--green">✓ Available ({{ available | length }})</span>
+                      <span class="avail-pill avail-pill--green">✓ {{ t.status_available }} ({{ available | length }})</span>
                     {% else %}
-                      <span class="avail-pill avail-pill--orange">⏳ On loan</span>
+                      <span class="avail-pill avail-pill--orange">⏳ {{ t.status_all_on_loan }}</span>
                     {% endif %}
                   {% elif book.get('is_browse_entry') %}
-                    <span class="avail-pill avail-pill--blue">↗ View on Aladí</span>
+                    <span class="avail-pill avail-pill--blue">↗ {{ t.book_aladi_btn }}</span>
                   {% endif %}
                 </div>
               </a>
@@ -233,8 +236,8 @@
         <!-- PAGINATION NOTE -->
         {% if results.total > 12 %}
           <div class="pagination-note">
-            Showing first 12 of {{ results.total }} results.
-            For more results, refine your search or enable <strong>Collapse editions</strong>.
+            {{ t.results_first_12 }} ({{ results.total }} {{ t.results_total }}).
+            {{ t.filter_collapse }}.
           </div>
         {% endif %}
       {% endif %}
@@ -242,30 +245,31 @@
   {% else %}
     <!-- Landing state -->
     <div class="landing-tips">
-      <h2 class="tips-title">Search tips</h2>
+      <h2 class="tips-title">{{ t.search_hero }}</h2>
       <div class="tips-grid">
         <div class="tip-card">
           <div class="tip-icon">🔤</div>
-          <h3>Keyword search</h3>
-          <p>Search across title, author, and subject at once.</p>
+          <h3>{{ t.st_X }}</h3>
+          <p>{% if lang == 'es' %}Busca por título, autor y tema a la vez.{% else %}Search across title, author, and subject at once.{% endif %}</p>
         </div>
         <div class="tip-card">
           <div class="tip-icon">📖</div>
-          <h3>By title</h3>
-          <p>Find a specific book by its exact title.</p>
+          <h3>{{ t.st_t }}</h3>
+          <p>{% if lang == 'es' %}Encuentra un libro por su título exacto.{% else %}Find a specific book by its exact title.{% endif %}</p>
         </div>
         <div class="tip-card">
           <div class="tip-icon">✍️</div>
-          <h3>By author</h3>
-          <p>Discover all works by your favourite author.</p>
+          <h3>{{ t.st_a }}</h3>
+          <p>{% if lang == 'es' %}Descubre todas las obras de tu autor favorito.{% else %}Discover all works by your favourite author.{% endif %}</p>
         </div>
         <div class="tip-card">
           <div class="tip-icon">🗂</div>
-          <h3>Collapse editions</h3>
-          <p>See all libraries holding any edition, sorted alphabetically with direct reserve.</p>
+          <h3>{{ t.filter_collapse }}</h3>
+          <p>{% if lang == 'es' %}Ve todas las bibliotecas con cualquier edición, con reserva directa.{% else %}See all libraries holding any edition, sorted alphabetically with direct reserve.{% endif %}</p>
         </div>
       </div>
     </div>
   {% endif %}
 </div>
 {% endblock %}
+

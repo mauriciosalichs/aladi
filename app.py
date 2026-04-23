@@ -7,6 +7,7 @@ from functools import wraps
 
 from flask import (
     Flask,
+    g,
     render_template,
     request,
     redirect,
@@ -17,9 +18,47 @@ from flask import (
 )
 from aladi_client import AladiClient
 from config import load_config, save_config
+from translations import (
+    get_translations,
+    get_search_types,
+    get_scope_groups,
+    SUPPORTED_LANGUAGES,
+    DEFAULT_LANGUAGE,
+)
 
 app = Flask(__name__)
 app.secret_key = os.urandom(32)
+
+
+# ------------------------------------------------------------------
+# Internationalisation helpers
+# ------------------------------------------------------------------
+
+@app.before_request
+def _set_language():
+    """Resolve the active language and make translations available in `g`."""
+    lang = session.get("lang")
+    if not lang:
+        cfg = load_config()
+        lang = cfg.get("language", DEFAULT_LANGUAGE)
+    if lang not in SUPPORTED_LANGUAGES:
+        lang = DEFAULT_LANGUAGE
+    g.lang = lang
+    g.t = get_translations(lang)
+
+
+@app.context_processor
+def _inject_i18n():
+    """Expose `t` (translations) and `lang` to every Jinja template."""
+    return {"t": g.get("t", get_translations(DEFAULT_LANGUAGE)),
+            "lang": g.get("lang", DEFAULT_LANGUAGE)}
+
+
+def _t(key: str, **kwargs) -> str:
+    """Translate *key* using the current request language."""
+    text = g.t.get(key, key)
+    return text.format(**kwargs) if kwargs else text
+
 
 # Store one AladiClient per Flask session (keyed by session id).
 # Simple in-process cache — fine for a single-user school project.
@@ -97,7 +136,7 @@ def login_required(f):
     def decorated(*args, **kwargs):
         client = _get_client()
         if not client or not client.is_logged_in:
-            flash("Please log in first.", "warning")
+            flash(_t("flash_login_required"), "warning")
             return redirect(url_for("login"))
         return f(*args, **kwargs)
     return decorated
@@ -106,6 +145,19 @@ def login_required(f):
 # ------------------------------------------------------------------
 # Routes
 # ------------------------------------------------------------------
+
+@app.route("/set_language", methods=["POST"])
+def set_language():
+    """Persist the chosen language to config.json and the session."""
+    lang = request.form.get("lang", DEFAULT_LANGUAGE)
+    if lang not in SUPPORTED_LANGUAGES:
+        lang = DEFAULT_LANGUAGE
+    session["lang"] = lang
+    cfg = load_config()
+    save_config({**cfg, "language": lang})
+    # Redirect back to the previous page, or to index
+    return redirect(request.referrer or url_for("index"))
+
 
 @app.route("/")
 def index():
@@ -122,7 +174,7 @@ def login():
         pin = request.form.get("pin", "").strip()
 
         if not barcode or not pin:
-            flash("Please enter both barcode and PIN.", "danger")
+            flash(_t("flash_missing_fields"), "danger")
             return render_template("login.html")
 
         client = AladiClient()
@@ -138,10 +190,10 @@ def login():
                 "patron_name": client.patron_name or "",
                 "barcode": barcode,
             })
-            flash(f"Welcome, {client.patron_name}!", "success")
+            flash(_t("flash_login_success", name=client.patron_name), "success")
             return redirect(url_for("search"), 303)
         else:
-            flash("Login failed. Check your barcode and PIN.", "danger")
+            flash(_t("flash_login_failed"), "danger")
 
     return render_template("login.html")
 
@@ -161,7 +213,7 @@ def logout():
         "patron_id": "",
         "patron_name": "",
     })
-    flash("You have been logged out.", "info")
+    flash(_t("flash_logged_out"), "info")
     return redirect(url_for("login"))
 
 
@@ -190,6 +242,7 @@ def search():
     results_data = None
     if query:
         save_config({
+            **cfg,
             "search_type": search_type,
             "scope": scope,
             "sort": sort,
@@ -214,8 +267,8 @@ def search():
         available_only=available_only,
         collapse_editions=collapse_editions,
         results=results_data,
-        search_types=AladiClient.SEARCH_TYPES,
-        scope_groups=AladiClient.SCOPE_GROUPS,
+        search_types=get_search_types(g.lang),
+        scope_groups=get_scope_groups(g.lang, AladiClient.SCOPE_GROUPS),
         patron_name=session.get("patron_name", ""),
     )
 
@@ -225,12 +278,12 @@ def search():
 def book_detail(bib_id: str):
     client = _get_client()
     if not re.match(r"^[a-zA-Z0-9]+$", bib_id):
-        flash("Invalid book ID.", "danger")
+        flash(_t("flash_invalid_id"), "danger")
         return redirect(url_for("search"))
 
     book = client.get_book(bib_id)
     if not book:
-        flash("Book not found.", "warning")
+        flash(_t("flash_book_not_found"), "warning")
         return redirect(url_for("search"))
 
     return render_template(
@@ -245,17 +298,17 @@ def book_detail(bib_id: str):
 def reserve(bib_id: str):
     """Show the hold/reserve form for a specific book."""
     if not re.match(r"^[a-zA-Z0-9]+$", bib_id):
-        flash("Invalid book ID.", "danger")
+        flash(_t("flash_invalid_id"), "danger")
         return redirect(url_for("search"))
 
     client = _get_client()
     hold_form = client.get_hold_form(bib_id)
     if not hold_form:
-        flash("Could not load the reservation form. Make sure you are logged in.", "danger")
+        flash(_t("flash_reserve_form_error"), "danger")
         return redirect(url_for("book_detail", bib_id=bib_id))
 
     if not hold_form["copies"]:
-        flash("There are no copies available to request for this title.", "warning")
+        flash(_t("flash_no_copies"), "warning")
         return redirect(url_for("book_detail", bib_id=bib_id))
 
     return render_template(
@@ -275,17 +328,17 @@ def reserve_confirm(bib_id: str):
 
     item_id = request.form.get("item_id", "").strip()
     if not item_id or not re.match(r"^i[0-9]+$", item_id):
-        flash("Please select a copy.", "warning")
+        flash(_t("flash_select_copy"), "warning")
         return redirect(url_for("reserve", bib_id=bib_id))
 
     client = _get_client()
     result = client.place_hold(bib_id, item_id)
 
     if result["success"]:
-        flash(f"✓ Reserva realizada. {result['message']}", "success")
+        flash(_t("flash_reserve_success", message=result["message"]), "success")
         return redirect(url_for("account"))
     else:
-        flash(f"No se pudo realizar la reserva: {result['message']}", "danger")
+        flash(_t("flash_reserve_failed", message=result["message"]), "danger")
         return redirect(url_for("book_detail", bib_id=bib_id))
 
 
@@ -302,6 +355,25 @@ def account():
         patron_name=session.get("patron_name", ""),
         patron_id=client.patron_id,
     )
+
+
+@app.route("/account/cancel_hold", methods=["POST"])
+@login_required
+def cancel_hold():
+    """Cancel a single hold directly, without a confirmation page."""
+    hold_id = request.form.get("hold_id", "").strip()
+    # hold_id is a Millennium hold record number, e.g. "h1234567"
+    if not hold_id or not re.match(r"^h\d+$", hold_id):
+        flash(_t("flash_cancel_hold_invalid"), "danger")
+        return redirect(url_for("account"))
+
+    client = _get_client()
+    ok = client.cancel_hold(hold_id)
+    if ok:
+        flash(_t("flash_cancel_hold_success"), "success")
+    else:
+        flash(_t("flash_cancel_hold_failed"), "danger")
+    return redirect(url_for("account"))
 
 
 if __name__ == "__main__":

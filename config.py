@@ -7,6 +7,8 @@ import os
 CONFIG_FILE = os.path.join(os.path.dirname(__file__), "config.json")
 
 DEFAULTS: dict = {
+    # UI language: 'en' or 'es'
+    "language": "en",
     # Search preferences
     "search_type": "X",
     "scope": "171",

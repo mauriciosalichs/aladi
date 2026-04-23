@@ -672,14 +672,50 @@ class AladiClient:
             pickup_td = row.find("td", class_="patFuncPickup")
             cancel_td = row.find("td", class_="patFuncCancel")
 
+            # Extract hold record ID from the cancel checkbox (e.g. "h1234567")
+            hold_id = ""
+            cancel_by = ""
+            if cancel_td:
+                chk = cancel_td.find("input", {"type": "checkbox"})
+                if chk:
+                    hold_id = chk.get("value", "")
+                # Remove the checkbox so get_text only gives the date
+                for tag in cancel_td.find_all("input"):
+                    tag.extract()
+                cancel_by = cancel_td.get_text(strip=True)
+
             items.append({
                 "title": title,
                 "bib_id": bib_id,
+                "hold_id": hold_id,
                 "status": status_td.get_text(strip=True) if status_td else "",
                 "pickup": pickup_td.get_text(strip=True) if pickup_td else "",
-                "cancel_by": cancel_td.get_text(strip=True) if cancel_td else "",
+                "cancel_by": cancel_by,
             })
         return items
+
+    def cancel_hold(self, hold_id: str) -> bool:
+        """
+        Cancel a single hold by its Millennium hold record ID (e.g. 'h1234567').
+
+        The Millennium OPAC cancel mechanism is a POST to the patron holds page
+        with the checkbox value(s) and the 'Cancel Marked' submit action.
+        Returns True if the server responded 200 (the hold list reloads on success).
+        """
+        if not self.patron_id or not hold_id:
+            return False
+        url = f"{BASE_URL}/patroninfo~S{SCOPE}/{self.patron_id}/holds"
+        resp = self.session.post(
+            url,
+            data={
+                "cancelHold[]": hold_id,
+                "updateHoldsAccount": "Cancel Marked",
+            },
+            headers={"Referer": url, "Origin": BASE_URL},
+            allow_redirects=True,
+            timeout=15,
+        )
+        return resp.status_code == 200
 
     # ------------------------------------------------------------------
     # Hold / Reserve

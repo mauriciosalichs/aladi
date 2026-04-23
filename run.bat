@@ -4,6 +4,11 @@ setlocal EnableDelayedExpansion
 :: ══════════════════════════════════════════════════════════════════════
 ::  Aladí Library Portal — Windows Launcher / First-Run Setup
 ::
+::  Usage:
+::    run.bat                   Full setup + launch (first-run)
+::    run.bat --already-installed   Skip setup; only free port,
+::                                  start server, and open browser.
+::
 ::  What this script does (in order):
 ::    1. Detects Python 3.10+ in PATH or common install paths
 ::    2. If missing, installs Python 3.12 silently (winget or direct
@@ -28,6 +33,13 @@ echo  =============================================================
 echo   Aladí Library Portal  ^|  Windows Launcher
 echo  =============================================================
 echo.
+
+:: ── Check for --already-installed argument ───────────────────────────
+if /i "%~1" == "--already-installed" (
+    echo  [INFO]  --already-installed: skipping setup, launching app ...
+    echo.
+    goto :launch
+)
 
 :: ─────────────────────────────────────────────────────────────────────
 :: Step 1 — Locate Python 3.10+ (or install it)
@@ -98,6 +110,7 @@ echo.
 :: ─────────────────────────────────────────────────────────────────────
 :: Step 4 — Free port 5000 (kill any LISTENING process on that port)
 :: ─────────────────────────────────────────────────────────────────────
+:launch
 echo  [INFO]  Releasing port %APP_PORT% if occupied ...
 for /f "tokens=5" %%P in ('netstat -aon 2^>nul ^| findstr "LISTENING" ^| findstr ":%APP_PORT% "') do (
     taskkill /F /PID %%P >nul 2>&1
@@ -225,6 +238,7 @@ set "_pstmp=%TEMP%\aladi_mkshortcut_%RANDOM%.ps1"
     echo $desktop = [Environment]::GetFolderPath^('Desktop'^)
     echo $lnk     = $ws.CreateShortcut^($desktop + '\Aladi.lnk'^)
     echo $lnk.TargetPath       = '%SCRIPT_DIR%\run.bat'
+    echo $lnk.Arguments         = '--already-installed'
     echo $lnk.WorkingDirectory  = '%SCRIPT_DIR%'
     echo $lnk.WindowStyle       = 1
     echo $lnk.IconLocation      = 'shell32.dll,13'
