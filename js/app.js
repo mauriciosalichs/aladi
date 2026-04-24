@@ -1,6 +1,6 @@
 // Aladí Library Portal — SPA Controller
 
-import { t, getLang, setLang, SEARCH_TYPES, SCOPE_GROUPS, SUPPORTED_LANGUAGES } from './translations.js';
+import { t, getLang, setLang, SEARCH_TYPES, SCOPE_GROUPS, SUPPORTED_LANGUAGES, MUNICIPALITIES, LIBRARY_BRANCHES } from './translations.js';
 import { loadConfig, saveConfig, clearSession, isLoggedIn, getProxyUrl } from './config.js';
 import * as client from './aladi-client.js';
 
@@ -247,9 +247,15 @@ function renderSearch() {
   const query = params.get('q') || '';
   const searchType = params.get('type') || cfg.search_type;
   const scope = params.get('scope') || cfg.scope;
+  const city = params.get('city') || '';
+  const branch = params.get('branch') || '';
   const sort = params.get('sort') || cfg.sort;
   const availableOnly = params.has('available_only') ? params.get('available_only') === '1' : cfg.available_only;
   const collapseEditions = params.has('collapse') ? params.get('collapse') === '1' : cfg.collapse_editions;
+
+  // Build city branches for the initial city selection
+  console.log(`[app] renderSearch with city="${city}" branch="${branch}"`);
+  const cityBranches = city ? LIBRARY_BRANCHES.filter(b => b.city === city) : [];
 
   let html = `<div class="search-page"><section class="search-hero">
     <h1 class="search-hero__title">${esc(t('search_hero'))}</h1>
@@ -290,6 +296,32 @@ function renderSearch() {
             <option value="c"${sort === 'c' ? ' selected' : ''}>${esc(t('sort_year'))}</option>
             <option value="r"${sort === 'r' ? ' selected' : ''}>${esc(t('sort_year_newest'))}</option>
           </select></div></div>
+
+      <!-- City / Library row -->
+      <div class="filter-row">
+        <div class="filter-group">
+          <label for="city" class="filter-label">${esc(t('search_city_label'))}</label>
+          <select name="city" id="city" class="filter-select">
+            <option value="">${esc(t('search_city_any'))}</option>`;
+
+  for (const m of MUNICIPALITIES) {
+    const sel = m.name === city ? ' selected' : '';
+    html += `<option value="${esc(m.name)}"${sel}>${esc(m.name)}</option>`;
+  }
+
+  html += `</select></div>
+        <div class="filter-group" id="branch-group">
+          <label for="branch" class="filter-label">${esc(t('search_branch_label'))}</label>
+          <select name="branch" id="branch" class="filter-select"${!city ? ' disabled' : ''}>
+            <option value="">${esc(t('search_branch_any'))}</option>`;
+
+  for (const b of cityBranches) {
+    const sel = b.code === branch ? ' selected' : '';
+    html += `<option value="${esc(b.code)}"${sel}>${esc(b.name)}</option>`;
+  }
+
+  html += `</select></div></div>
+
       <div class="adv-filter-row">
         <label class="adv-check-label">
           <input type="checkbox" name="available_only" value="1" id="available_only" class="adv-check" ${availableOnly ? 'checked' : ''}>
@@ -310,6 +342,25 @@ function renderSearch() {
 
   document.getElementById('app-content').innerHTML = html;
 
+  // City → branch cascade
+  document.getElementById('city').addEventListener('change', () => {
+    const selectedCity = document.getElementById('city').value;
+    const branchSelect = document.getElementById('branch');
+    branchSelect.innerHTML = `<option value="">${esc(t('search_branch_any'))}</option>`;
+    if (selectedCity) {
+      branchSelect.disabled = false;
+      const filtered = LIBRARY_BRANCHES.filter(b => b.city === selectedCity);
+      for (const b of filtered) {
+        const opt = document.createElement('option');
+        opt.value = b.code;
+        opt.textContent = b.name;
+        branchSelect.appendChild(opt);
+      }
+    } else {
+      branchSelect.disabled = true;
+    }
+  });
+
   // Bind form
   document.getElementById('search-form').addEventListener('submit', (e) => {
     e.preventDefault();
@@ -320,18 +371,24 @@ function renderSearch() {
     const so = document.getElementById('sort').value;
     const ao = document.getElementById('available_only').checked ? '1' : '0';
     const co = document.getElementById('collapse').checked ? '1' : '0';
-    navigate(`#/search?q=${encodeURIComponent(q)}&type=${type}&scope=${sc}&sort=${so}&available_only=${ao}&collapse=${co}`);
+    const ci = document.getElementById('city').value;
+    const br = document.getElementById('branch').value;
+    let hashUrl = `#/search?q=${encodeURIComponent(q)}&type=${type}&scope=${sc}&sort=${so}&available_only=${ao}&collapse=${co}`;
+    if (ci) hashUrl += `&city=${encodeURIComponent(ci)}`;
+    if (br) hashUrl += `&branch=${encodeURIComponent(br)}`;
+    navigate(hashUrl);
   });
 
   if (query) {
-    doSearch(query, searchType, scope, sort, availableOnly, collapseEditions);
+    doSearch(query, searchType, scope, sort, availableOnly, collapseEditions, city, branch);
   }
 }
 
-async function doSearch(query, searchType, scope, sort, availableOnly, collapseEditions) {
+async function doSearch(query, searchType, scope, sort, availableOnly, collapseEditions, city = '', branch = '') {
   const container = document.getElementById('results-container');
   container.innerHTML = '<div class="empty-state"><div class="empty-icon">⏳</div><p>Searching…</p></div>';
 
+  console.log(`[app] doSearch query="${query}" type=${searchType} scope=${scope} sort=${sort} availableOnly=${availableOnly} collapse=${collapseEditions} city="${city}" branch="${branch}"`);
   // Save preferences
   const cfg = loadConfig();
   saveConfig({
@@ -346,13 +403,17 @@ async function doSearch(query, searchType, scope, sort, availableOnly, collapseE
   try {
     let data;
     if (collapseEditions) {
-      data = await client.collapseSearch(query, searchType, scope, sort, availableOnly);
+      console.log(`[app] using collapseSearch`);
+      data = await client.collapseSearch(query, searchType, scope, sort, availableOnly, city, branch);
     } else {
-      data = await client.search(query, searchType, scope, sort, 1, availableOnly);
+      console.log(`[app] using search`);
+      data = await client.search(query, searchType, scope, sort, 1, availableOnly, city, branch);
     }
+    console.log(`[app] results received: total=${data.total ?? data.total_results} collapsed=${!!data.collapsed}`);
     container.innerHTML = renderResults(data);
     bindResultActions();
   } catch (err) {
+    console.error(`[app] doSearch error:`, err);
     container.innerHTML = `<div class="empty-state"><div class="empty-icon">❌</div><h2>Error</h2><p>${esc(err.message)}</p></div>`;
   }
 }

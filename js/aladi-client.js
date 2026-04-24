@@ -1,6 +1,7 @@
 // Aladí Library Portal — HTTP Client (browser-side, uses CORS proxy)
 
 import { loadConfig, saveConfig } from './config.js';
+import { LIBRARY_BRANCHES } from './translations.js';
 
 const BASE_URL = 'https://aladi.diba.cat';
 const SCOPE = '171';
@@ -31,6 +32,7 @@ async function proxyFetch(targetUrl, options = {}) {
   if (!proxyUrl) {
     throw new Error('CORS proxy URL not configured. Go to Settings to set it up.');
   }
+  console.log(`[proxyFetch] ${options.method || 'GET'} → ${targetUrl}`);
 
   const headers = { 'X-Target-URL': targetUrl };
 
@@ -64,7 +66,7 @@ async function proxyFetch(targetUrl, options = {}) {
 
   const text = await resp.text();
   const finalUrl = resp.headers.get('X-Final-URL') || targetUrl;
-
+  console.log(`[proxyFetch] response status=${resp.status} finalUrl=${finalUrl} bodyLen=${text.length}`);
   return { text, finalUrl, status: resp.status };
 }
 
@@ -147,26 +149,149 @@ export function logout() {
 
 // ── Search ──────────────────────────────────────────────────────────
 
-export async function search(query, searchType = 'X', scope = '171', sort = 'D', page = 1, availableOnly = false) {
+/**
+ * Aladi search URL builder.
+ *
+ * The catalog's advanced search (search/X) uses the /X path with SEARCH=
+ * parameter and optional field-limit prefixes:
+ *   /search~S{scope}/X?SEARCH={prefix}{query}&searchscope={scope}&SORT={sort}
+ *
+ * Field prefixes:
+ *   a:  → author/artist     e.g. SEARCH=a: stephen king
+ *   t:  → title             e.g. SEARCH=t: the shining
+ *   d:  → subject           e.g. SEARCH=d: horror
+ *   i:  → ISBN/ISSN         e.g. SEARCH=i: 9781234567890
+ *   c:  → call number       e.g. SEARCH=c: 821-3
+ *  (none) → any keyword     e.g. SEARCH=stephen king
+ *
+ * Branch filter: append &b={branchCode} (alphanumeric code like b801, cts1…)
+ * City scope: change ~S{scope} in path and searchscope param to the city code.
+ * When branch is set, use scope 171 (all) – branch already implies the city.
+ */
+// ── Location filtering helpers ────────────────────────────────────
+
+/**
+ * Strip accents / diacritics, lowercase, collapse whitespace.
+ * This lets us compare Aladi location strings (which use varying
+ * abbreviations and accents) with our branch/city names loosely.
+ */
+function sanitize(s) {
+  return (s || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')  // remove combining diacritics
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]/g, ' ')       // non-alphanumeric → space
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Given a LIBRARY_BRANCHES name like "Barcelona. Jaume Fuster",
+ * return the part after the first ". " — e.g. "Jaume Fuster".
+ */
+function branchNamePart(fullName) {
+  const idx = fullName.indexOf('. ');
+  return idx >= 0 ? fullName.slice(idx + 2) : fullName;
+}
+
+/**
+ * Return true if the availability location string matches the selected
+ * city and/or branch.
+ *
+ * Aladi locations look like  "BCN GRA.Jaume Fuster"  or
+ * "ST. PERE DE RIBES.Manuel de Pedrolo".  The segment after the last
+ * dot is the branch name — which matches LIBRARY_BRANCHES[n].name
+ * after the "City. " prefix.  We cannot rely on the city abbreviation
+ * (BCN ≠ Barcelona), so for city-only filtering we check whether any
+ * branch belonging to that city has its name part present in the
+ * location string.
+ *
+ * @param {string} location  - raw location from availability item
+ * @param {string} cityName  - MUNICIPALITIES name, or ''
+ * @param {string} branchCode - LIBRARY_BRANCHES code, or ''
+ */
+function locationMatchesFilter(location, cityName, branchCode) {
+  const loc = sanitize(location);
+
+  if (branchCode) {
+    const entry = LIBRARY_BRANCHES.find(b => b.code === branchCode);
+    if (!entry) return true; // unknown code — don't filter
+    const namePart = sanitize(branchNamePart(entry.name));
+    return loc.includes(namePart);
+  }
+
+  if (cityName) {
+    const cityBranches = LIBRARY_BRANCHES.filter(b => b.city === cityName);
+    if (!cityBranches.length) return true; // unknown city — don't filter
+    return cityBranches.some(b => loc.includes(sanitize(branchNamePart(b.name))));
+  }
+
+  return true; // no filter active
+}
+
+const FIELD_PREFIX = { a: 'a: ', t: 't: ', d: 'd: ', i: 'i: ', c: 'c: ', X: '' };
+
+function buildSearchUrl(query, searchType, scope, sort, branch) {
+  const effectiveScope = branch ? '171' : scope;
+  const prefix = FIELD_PREFIX[searchType] ?? '';
+  const searchArg = prefix + query;
+
   const params = new URLSearchParams({
-    searchtype: searchType,
-    searcharg: query,
-    searchscope: scope,
+    SEARCH: searchArg,
+    searchscope: effectiveScope,
     SORT: sort,
   });
-  const url = `${BASE_URL}/search~S${scope}/?${params}`;
+  if (branch) params.set('b', branch);
+
+  const url = `${BASE_URL}/search~S${effectiveScope}/X?${params}`;
+  console.log(`[aladi] buildSearchUrl type=${searchType} scope=${effectiveScope} branch=${branch || 'none'} → ${url}`);
+  return { url, effectiveScope };
+}
+
+export async function search(query, searchType = 'X', scope = '171', sort = 'D', page = 1, availableOnly = false, city = '', branch = '') {
+  console.log(`[aladi] \n\nsearch(query="${query}", type=${searchType}, scope=${scope}, sort=${sort}, availableOnly=${availableOnly}, city="${city}", branch="${branch}")\n\n`);
+  const { url, effectiveScope } = buildSearchUrl(query, searchType, scope, sort, branch);
   const resp = await proxyFetch(url);
-  const data = parseResults(resp.text, query, searchType, scope, page);
+  console.log(`[aladi] search response status=${resp.status} finalUrl=${resp.finalUrl}`);
+  const data = parseResults(resp.text, query, searchType, effectiveScope, page);
+  console.log(`[aladi] search parsed: total=${data.total} results=${data.results.length} isBrowse=${data.is_browse}`);
+
+  console.log(`[DEBUG] first 3 results: ${JSON.stringify(data.results.slice(0, 3), null, 2)}`);
+  
   if (availableOnly) {
+    const before = data.results.length;
     data.results = data.results.filter(
       r => r.availability && r.availability.some(i => i.status === 'Available')
     );
+    console.log(`[aladi] availableOnly filter: ${before} → ${data.results.length}`);
   }
+
+  // Location-based city / branch filtering.
+  // Aladi location strings (e.g. "BCN GRA.Jaume Fuster") contain the
+  // branch name but not the full city name, so we match on branch name
+  // parts from LIBRARY_BRANCHES.
+  if (city !== '' || branch !== '') {
+    const beforeCount = data.results.length;
+    data.results = data.results
+      .map(r => {
+        const filtered = (r.availability || []).filter(
+          item => locationMatchesFilter(item.location, city, branch)
+        );
+        return { ...r, availability: filtered };
+      })
+      .filter(r => r.availability.length > 0);
+    console.log(`[aladi] city/branch filter (city="${city}" branch="${branch}"): ${beforeCount} → ${data.results.length} records`);
+  }
+
+  console.log(`[DEBUG] first 3 results after filter: ${JSON.stringify(data.results.slice(0, 3), null, 2)}`);
+  
+
   return data;
 }
 
-export async function collapseSearch(query, searchType = 'X', scope = '171', sort = 'D', availableOnly = false) {
-  const results = await search(query, searchType, scope, sort);
+export async function collapseSearch(query, searchType = 'X', scope = '171', sort = 'D', availableOnly = false, city = '', branch = '') {
+  console.log(`[aladi] collapseSearch(query="${query}", type=${searchType}, scope=${scope}, city="${city}", branch="${branch}")`);
+  const results = await search(query, searchType, scope, sort, 1, false, city, branch);
   const books = results.results.filter(b => b.bib_id && !b.is_browse_entry);
 
   // Fetch hold forms in parallel
@@ -191,6 +316,16 @@ export async function collapseSearch(query, searchType = 'X', scope = '171', sor
 
   const allLists = await Promise.all(formPromises);
   let allCopies = allLists.flat();
+  console.log(`[aladi] collapseSearch: fetched ${books.length} hold forms → ${allCopies.length} total copies`);
+
+  // Apply city / branch filter on the copy's library location field.
+  // getHoldForm returns all copies from the catalog regardless of scope,
+  // so we must re-apply the same location filter used in search().
+  if (city || branch) {
+    const before = allCopies.length;
+    allCopies = allCopies.filter(c => locationMatchesFilter(c.library, city, branch));
+    console.log(`[aladi] collapseSearch city/branch filter (city="${city}" branch="${branch}"): ${before} → ${allCopies.length} copies`);
+  }
 
   allCopies.sort((a, b) => {
     const lib = a.library.toLowerCase().localeCompare(b.library.toLowerCase());
@@ -199,7 +334,9 @@ export async function collapseSearch(query, searchType = 'X', scope = '171', sor
   });
 
   if (availableOnly) {
+    const before = allCopies.length;
     allCopies = allCopies.filter(c => c.status === 'Available');
+    console.log(`[aladi] collapseSearch availableOnly: ${before} → ${allCopies.length} copies`);
   }
 
   const grouped = {};
@@ -208,6 +345,7 @@ export async function collapseSearch(query, searchType = 'X', scope = '171', sor
     grouped[copy.library].push(copy);
   }
   const groupedCopies = Object.entries(grouped);
+  console.log(`[aladi] collapseSearch: ${groupedCopies.length} libraries, ${allCopies.length} copies total`);
 
   return {
     query,
@@ -227,7 +365,10 @@ function parseResults(html, query, searchType, scope, page) {
   const header = doc.querySelector('td.browseHeaderData');
   if (header) {
     const m = header.textContent.match(/(\d+)\s+of\s+(\d+)/);
-    if (m) total = parseInt(m[2], 10);
+    if (m) {
+      total = parseInt(m[2], 10);
+      console.log(`[aladi] parseResults: browseHeader says ${m[1]} of ${total}`);
+    }
   }
 
   const briefRows = doc.querySelectorAll('td.briefCitRow');
@@ -235,15 +376,19 @@ function parseResults(html, query, searchType, scope, page) {
   let isBrowse = false;
 
   if (briefRows.length) {
+    console.log(`[aladi] parseResults: found ${briefRows.length} briefCitRow elements`);
     books = [];
     briefRows.forEach(row => {
       const b = parseBriefRow(row);
       if (b) books.push(b);
     });
+    console.log(`[aladi] parseResults: parsed ${books.length} book records`);
   } else {
+    console.warn(`[aladi] parseResults: no briefCitRows — falling back to browse list`);
     books = parseBrowseList(doc, searchType, scope);
     isBrowse = books.length > 0;
     if (!total && books.length) total = books.length;
+    console.log(`[aladi] parseResults: browse list entries: ${books.length}`);
   }
 
   const pages = Math.max(1, Math.ceil(total / 12));

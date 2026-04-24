@@ -307,6 +307,7 @@ img { display: block; max-width: 100%; }
   padding-right: 2rem;
 }
 .filter-select option { background: var(--brand-dark); }
+.filter-select:disabled { opacity: 0.45; cursor: not-allowed; }
 
 /* Results */
 .results-header {
