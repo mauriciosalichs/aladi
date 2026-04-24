@@ -9,6 +9,8 @@ const DEFAULTS = {
   sort: 'D',
   available_only: false,
   collapse_editions: false,
+  city: '',
+  branch: '',
   proxy_url: 'https://aladi-proxy.mauricio-salichs.workers.dev/',
   session_cookies: {},
   patron_id: '',

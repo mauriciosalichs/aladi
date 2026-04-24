@@ -24,6 +24,107 @@ function libLink(name) {
   return `<a href="${libMapsUrl(name)}" target="_blank" rel="noopener" class="lib-maps-link">${esc(name)}</a>`;
 }
 
+// ── Map state ────────────────────────────────────────────────────────────────
+let _mapEnabled = localStorage.getItem('map_enabled') === '1';
+let _leafletMap = null;
+let _leafletMarkers = {}; // name → L.marker
+
+// Build a lookup table from LIBRARY_BRANCHES pre-baked coords
+// Key = branch short-name after the first '. ', diacritics stripped
+function branchKey(name, removeOneMore = false) {
+  const dot = name.indexOf('.');
+  const part = dot !== -1 ? name.slice(dot + (removeOneMore ? 2 : 1)) : name;
+  return part.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s/g, '').toLowerCase().replace(/-/g, '');
+}
+
+const _branchCoords = Object.fromEntries(
+  LIBRARY_BRANCHES.filter(b => b.lat != null).map(b => [branchKey(b.name, true), { lat: b.lat, lng: b.lng }])
+);
+
+function fitMapBounds() {
+  if (!_leafletMap) return;
+  const pts = Object.values(_leafletMarkers).map(m => m.getLatLng());
+  if (pts.length === 1) _leafletMap.setView(pts[0], 14);
+  else if (pts.length > 1) _leafletMap.fitBounds(L.latLngBounds(pts), { padding: [40, 40], maxZoom: 15 });
+}
+
+function mountMapPanel() {
+  if (typeof L === 'undefined') return;
+  const placeholder = document.getElementById('search-map-placeholder');
+  if (!placeholder) return;
+
+  // Create panel DOM if needed
+  if (!document.getElementById('search-map-panel')) {
+    placeholder.innerHTML = `<div id="search-map-panel" class="search-map-panel"><div id="search-map-leaflet" style="height:100%;width:100%;"></div><button id="map-close-btn" class="map-close-btn" title="Close map">×</button></div>`;
+  }
+
+  // Wire close button (re-bind each time panel is created)
+  const closeBtn = document.getElementById('map-close-btn');
+  if (closeBtn) {
+    closeBtn.onclick = () => {
+      _mapEnabled = false;
+      localStorage.setItem('map_enabled', '0');
+      const toggleBtn = document.getElementById('map-toggle-btn');
+      if (toggleBtn) { toggleBtn.textContent = t('btn_show_map'); toggleBtn.classList.remove('active'); }
+      destroyMapPanel();
+    };
+  }
+
+  // Init Leaflet instance if needed
+  if (!_leafletMap) {
+    _leafletMap = L.map('search-map-leaflet').setView([41.65, 1.9], 8);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      maxZoom: 19
+    }).addTo(_leafletMap);
+  }
+  setTimeout(() => _leafletMap && _leafletMap.invalidateSize(), 200);
+
+  // Clear old markers
+  Object.values(_leafletMarkers).forEach(m => m.remove());
+  _leafletMarkers = {};
+
+  // Place a pin for every unique library in current results immediately
+  const libLinks = document.querySelectorAll('#results-container .lib-maps-link');
+  const names = [...new Set([...libLinks].map(a => a.textContent.trim()))];
+  for (const name of names) {
+    const branchName = branchKey(name);
+    const coords = _branchCoords[branchName];
+    if (coords && !_leafletMarkers[name]) {
+      _leafletMarkers[name] = L.marker([coords.lat, coords.lng])
+        .bindPopup(`<strong>${name}</strong>`)
+        .addTo(_leafletMap);
+    } else {
+      console.log(`[map] No coordinates for ${name}, skipping marker`);
+    }
+  }
+  fitMapBounds();
+
+  // Wire hover: flyTo immediately on mouseenter
+  libLinks.forEach(a => {
+    const name = a.textContent.trim();
+    const branchName = branchKey(name);
+    a.addEventListener('mouseenter', () => {
+      const coords = _branchCoords[branchName];
+      console.log(`[map] Hover on ${name}: coords=${coords ? `${coords.lat},${coords.lng}` : 'n/a'}`);
+      if (coords && _leafletMap) {
+        console.log(`[map] Flying to ${name} at ${coords.lat},${coords.lng}`);
+        _leafletMap.flyTo([coords.lat, coords.lng], 15, { duration: 0.5 });
+        _leafletMarkers[name]?.openPopup();
+      } else {
+        console.log(`[map] No coordinates for ${branchName}, cannot flyTo`);
+      }
+    });
+  });
+}
+
+function destroyMapPanel() {
+  if (_leafletMap) { _leafletMap.remove(); _leafletMap = null; }
+  _leafletMarkers = {};
+  const placeholder = document.getElementById('search-map-placeholder');
+  if (placeholder) placeholder.innerHTML = '';
+}
+
 function flash(message, category = 'info') {
   const container = document.getElementById('flash-container');
   const el = document.createElement('div');
@@ -246,6 +347,7 @@ function renderSettings() {
 
 // ── SEARCH ──
 function renderSearch(skipSearch = false) {
+  destroyMapPanel();
   currentView = 'search';
   setTitle(t('search_page_title'));
   renderNav();
@@ -255,8 +357,8 @@ function renderSearch(skipSearch = false) {
   const query = params.get('q') || '';
   const searchType = params.get('type') || cfg.search_type;
   const scope = params.get('scope') || cfg.scope;
-  const city = params.get('city') || '';
-  const branch = params.get('branch') || '';
+  const city = params.get('city') || cfg.city || '';
+  const branch = params.get('branch') || cfg.branch || '';
   const sort = params.get('sort') || cfg.sort;
   const availableOnly = params.has('available_only') ? params.get('available_only') === '1' : cfg.available_only;
   const collapseEditions = params.has('collapse') ? params.get('collapse') === '1' : cfg.collapse_editions;
@@ -339,8 +441,10 @@ function renderSearch(skipSearch = false) {
           <input type="checkbox" name="collapse" value="1" id="collapse" class="adv-check" ${collapseEditions ? 'checked' : ''}>
           <span class="adv-check-text">${esc(t('filter_collapse'))}</span>
         </label>
+        <button type="button" id="map-toggle-btn" class="btn-map-toggle${_mapEnabled ? ' active' : ''}">${_mapEnabled ? esc(t('btn_hide_map')) : esc(t('btn_show_map'))}</button>
       </div>
-    </form></section>`;
+    </form></section>
+    <div id="search-map-placeholder"></div>`;
 
   html += '<div id="results-container">';
   html += '</div></div>';
@@ -384,6 +488,16 @@ function renderSearch(skipSearch = false) {
     navigate(hashUrl);
   });
 
+  document.getElementById('map-toggle-btn').addEventListener('click', () => {
+    _mapEnabled = !_mapEnabled;
+    localStorage.setItem('map_enabled', _mapEnabled ? '1' : '0');
+    const btn = document.getElementById('map-toggle-btn');
+    btn.textContent = _mapEnabled ? t('btn_hide_map') : t('btn_show_map');
+    btn.classList.toggle('active', _mapEnabled);
+    if (_mapEnabled && window.innerWidth >= 768) mountMapPanel();
+    else destroyMapPanel();
+  });
+
   if (query && !skipSearch) {
     doSearch(query, searchType, scope, sort, availableOnly, collapseEditions, city, branch);
   }
@@ -423,6 +537,8 @@ async function doSearch(query, searchType, scope, sort, availableOnly, collapseE
     sort,
     available_only: availableOnly,
     collapse_editions: collapseEditions,
+    city,
+    branch,
   });
 
   try {
@@ -440,6 +556,7 @@ async function doSearch(query, searchType, scope, sort, availableOnly, collapseE
     data._branch = branch;
     container.innerHTML = renderResults(data);
     bindResultActions();
+    if (_mapEnabled && window.innerWidth >= 768) mountMapPanel();
   } catch (err) {
     if (err.name === 'AbortError') return; // silent cancel
     console.error(`[app] doSearch error:`, err);
@@ -610,14 +727,14 @@ function bindResultActions() {
         observer.disconnect();
         sentinel.querySelector('.scroll-loading-indicator').textContent = '⏳';
         try {
-          const pageUrl    = sentinel.dataset.pageUrl;
-          const query      = sentinel.dataset.query;
+          const pageUrl = sentinel.dataset.pageUrl;
+          const query = sentinel.dataset.query;
           const searchType = sentinel.dataset.searchType;
-          const scope      = sentinel.dataset.scope;
-          const sort       = sentinel.dataset.sort || 'D';
-          const page       = parseInt(sentinel.dataset.page, 10);
-          const city       = sentinel.dataset.city || '';
-          const branch     = sentinel.dataset.branch || '';
+          const scope = sentinel.dataset.scope;
+          const sort = sentinel.dataset.sort || 'D';
+          const page = parseInt(sentinel.dataset.page, 10);
+          const city = sentinel.dataset.city || '';
+          const branch = sentinel.dataset.branch || '';
           console.log(`[app] infinite scroll: fetching page=${page} url=${pageUrl.slice(-80)}`);
           const data = await client.searchPage(pageUrl, query, searchType, scope, sort, page, city, branch);
           console.log(`[app] infinite scroll: got ${data.results.length} results, next=${data.next_page_url ? 'YES' : 'none'}`);
@@ -843,13 +960,13 @@ async function renderAccount() {
         <th>${esc(t('account_col_pickup'))}</th><th>${esc(t('account_col_cancelby'))}</th><th></th>
         </tr></thead><tbody>`;
       for (const hold of holds) {
-        html += `<tr><td data-col="${esc(t('account_col_title'))}">` ;
+        html += `<tr><td data-col="${esc(t('account_col_title'))}">`;
         if (hold.bib_id) {
           html += `<a href="#/book/${hold.bib_id}" class="table-link">${esc(hold.title)}</a>`;
         } else {
           html += esc(hold.title);
         }
-        html += `</td><td data-col="${esc(t('account_col_status'))}">` ;
+        html += `</td><td data-col="${esc(t('account_col_status'))}">`;
         if (hold.status.includes('Ready') || hold.status.includes('pick up')) {
           html += `<span class="status-pill status-pill--green">✓ ${esc(hold.status)}</span>`;
         } else if (hold.status.includes('Transit')) {
