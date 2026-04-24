@@ -1,7 +1,7 @@
 // Aladí Library Portal — HTTP Client (browser-side, uses CORS proxy)
 
 import { loadConfig, saveConfig } from './config.js';
-import { LIBRARY_BRANCHES } from './translations.js';
+import { LIBRARY_BRANCHES, MUNICIPALITIES } from './translations.js';
 
 const BASE_URL = 'https://aladi.diba.cat';
 const SCOPE = '171';
@@ -231,8 +231,28 @@ function locationMatchesFilter(location, cityName, branchCode) {
 
 const FIELD_PREFIX = { a: 'a: ', t: 't: ', d: 'd: ', i: 'i: ', c: 'c: ', X: '' };
 
-function buildSearchUrl(query, searchType, scope, sort, branch) {
-  const effectiveScope = branch ? '171' : scope;
+/**
+ * Construct an Aladi browse/pagination URL directly — no session required.
+ * Matches the format Aladi itself uses for page links:
+ *   /search~S{scope}?/X{arg}&searchscope={scope}&SORT={sort}
+ *                    /X{arg}&searchscope={scope}&SORT={sort}&SUBKEY={arg}
+ *                    /{start},{total},{total},B/browse
+ */
+function buildBrowsePageUrl(searchArg, scope, sort, startRecord, total) {
+  const enc = encodeURIComponent(searchArg).replace(/%20/g, '+');
+  const part = `X${enc}&searchscope=${scope}&SORT=${sort}`;
+  const url = `${BASE_URL}/search~S${scope}?/${part}/${part}&SUBKEY=${enc}/${startRecord}%2C${total}%2C${total}%2CB/browse`;
+  console.log(`[aladi] buildBrowsePageUrl start=${startRecord} total=${total} → ${url.slice(0, 120)}`);
+  return url;
+}
+
+function buildSearchUrl(query, searchType, scope, sort, branch, city) {
+  // When a city is selected, use its municipality scope code server-side so
+  // Aladi's result pool is already limited to that city (e.g. 279 Barcelona
+  // books instead of 580 all-catalog). Branch filter (b=) works with any
+  // scope, so we keep the city scope even when a branch is also selected.
+  const cityEntry = city ? MUNICIPALITIES.find(m => m.name === city) : null;
+  const effectiveScope = (cityEntry ? cityEntry.code : null) || scope || '171';
   const prefix = FIELD_PREFIX[searchType] ?? '';
   const searchArg = prefix + query;
 
@@ -245,15 +265,15 @@ function buildSearchUrl(query, searchType, scope, sort, branch) {
 
   const url = `${BASE_URL}/search~S${effectiveScope}/X?${params}`;
   console.log(`[aladi] buildSearchUrl type=${searchType} scope=${effectiveScope} branch=${branch || 'none'} → ${url}`);
-  return { url, effectiveScope };
+  return { url, effectiveScope, searchArg };
 }
 
 export async function search(query, searchType = 'X', scope = '171', sort = 'D', page = 1, availableOnly = false, city = '', branch = '') {
   console.log(`[aladi] \n\nsearch(query="${query}", type=${searchType}, scope=${scope}, sort=${sort}, availableOnly=${availableOnly}, city="${city}", branch="${branch}")\n\n`);
-  const { url, effectiveScope } = buildSearchUrl(query, searchType, scope, sort, branch);
+  const { url, effectiveScope, searchArg } = buildSearchUrl(query, searchType, scope, sort, branch, city);
   const resp = await proxyFetch(url);
   console.log(`[aladi] search response status=${resp.status} finalUrl=${resp.finalUrl}`);
-  const data = parseResults(resp.text, query, searchType, effectiveScope, page);
+  const data = parseResults(resp.text, query, searchType, effectiveScope, page, searchArg);
   console.log(`[aladi] search parsed: total=${data.total} results=${data.results.length} isBrowse=${data.is_browse}`);
 
   console.log(`[DEBUG] first 3 results: ${JSON.stringify(data.results.slice(0, 3), null, 2)}`);
@@ -291,8 +311,27 @@ export async function search(query, searchType = 'X', scope = '171', sort = 'D',
 
 export async function collapseSearch(query, searchType = 'X', scope = '171', sort = 'D', availableOnly = false, city = '', branch = '') {
   console.log(`[aladi] collapseSearch(query="${query}", type=${searchType}, scope=${scope}, city="${city}", branch="${branch}")`);
-  const results = await search(query, searchType, scope, sort, 1, false, city, branch);
-  const books = results.results.filter(b => b.bib_id && !b.is_browse_entry);
+
+  // Fetch page 1, then follow next_page_url links to collect all editions.
+  // Cap at MAX_COLLAPSE_PAGES to avoid runaway requests on huge result sets.
+  const MAX_COLLAPSE_PAGES = 5; // up to 60 editions
+  const firstPage = await search(query, searchType, scope, sort, 1, false, city, branch);
+  let allBooks = firstPage.results.filter(b => b.bib_id && !b.is_browse_entry);
+  let nextUrl = firstPage.next_page_url;
+  let pageNum = 2;
+
+  while (nextUrl && pageNum <= MAX_COLLAPSE_PAGES) {
+    console.log(`[aladi] collapseSearch fetching page ${pageNum}: ${nextUrl.slice(-50)}`);
+    const pageData = await searchPage(nextUrl, query, searchType, firstPage.scope, sort, pageNum, city, branch);
+    allBooks = allBooks.concat(pageData.results.filter(b => b.bib_id && !b.is_browse_entry));
+    nextUrl = pageData.next_page_url;
+    pageNum++;
+  }
+
+  // Deduplicate by bib_id (same edition may appear on multiple pages)
+  const seen = new Set();
+  const books = allBooks.filter(b => { if (seen.has(b.bib_id)) return false; seen.add(b.bib_id); return true; });
+  console.log(`[aladi] collapseSearch: ${books.length} unique editions across ${pageNum - 1} page(s)`);
 
   // Fetch hold forms in parallel
   const formPromises = books.map(async (book) => {
@@ -351,7 +390,7 @@ export async function collapseSearch(query, searchType = 'X', scope = '171', sor
     query,
     search_type: searchType,
     scope,
-    total_results: results.total,
+    total_results: firstPage.total,
     editions_fetched: books.length,
     copies: allCopies,
     grouped_copies: groupedCopies,
@@ -359,7 +398,30 @@ export async function collapseSearch(query, searchType = 'X', scope = '171', sor
   };
 }
 
-function parseResults(html, query, searchType, scope, page) {
+/**
+ * Fetch a subsequent page of results using a browse URL extracted from
+ * a previous page's HTML. Requires the same session cookies that were set
+ * during the original search() call — the proxy maintains these automatically.
+ */
+export async function searchPage(pageUrl, query, searchType, scope, sort, page, city = '', branch = '') {
+  console.log(`[aladi] searchPage(page=${page}) → ${pageUrl}`);
+  const resp = await proxyFetch(pageUrl);
+  const prefix = FIELD_PREFIX[searchType] ?? '';
+  const searchArg = prefix + query;
+  const data = parseResults(resp.text, query, searchType, scope, page, searchArg);
+  console.log(`[aladi] searchPage parsed: total=${data.total} results=${data.results.length}`);
+
+  if (city || branch) {
+    const before = data.results.length;
+    data.results = data.results
+      .map(r => ({ ...r, availability: (r.availability || []).filter(item => locationMatchesFilter(item.location, city, branch)) }))
+      .filter(r => r.availability.length > 0);
+    console.log(`[aladi] searchPage city/branch filter: ${before} → ${data.results.length}`);
+  }
+  return data;
+}
+
+function parseResults(html, query, searchType, scope, page, searchArg = null) {
   const doc = parseHTML(html);
   let total = 0;
   const header = doc.querySelector('td.browseHeaderData');
@@ -393,7 +455,15 @@ function parseResults(html, query, searchType, scope, page) {
 
   const pages = Math.max(1, Math.ceil(total / 12));
 
-  return { results: books, total, page, pages, query, search_type: searchType, scope, is_browse: isBrowse };
+  // Build the next-page URL deterministically using the same format Aladi uses
+  // for its own page links — no session scraping needed.
+  const nextStart = page * 12 + 1; // page 1 → start 13, page 2 → start 25 ...
+  const next_page_url = (total > 0 && nextStart <= total && searchArg != null)
+    ? buildBrowsePageUrl(searchArg, scope, 'D', nextStart, total)
+    : null;
+  console.log(`[aladi] parseResults: page=${page} total=${total} nextStart=${nextStart} next_page_url=${next_page_url ? 'YES' : 'null'}`);
+
+  return { results: books, total, page, pages, next_page_url, query, search_type: searchType, scope, sort: 'D', is_browse: isBrowse };
 }
 
 function parseBriefRow(row) {

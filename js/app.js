@@ -410,6 +410,8 @@ async function doSearch(query, searchType, scope, sort, availableOnly, collapseE
       data = await client.search(query, searchType, scope, sort, 1, availableOnly, city, branch);
     }
     console.log(`[app] results received: total=${data.total ?? data.total_results} collapsed=${!!data.collapsed}`);
+    data._city = city;
+    data._branch = branch;
     container.innerHTML = renderResults(data);
     bindResultActions();
   } catch (err) {
@@ -517,8 +519,21 @@ function renderGridResults(data) {
 
   html += '</div>';
 
-  if (data.total > 12) {
-    html += `<div class="pagination-note">${esc(t('results_first_12'))} (${data.total} ${esc(t('results_total'))}). ${esc(t('filter_collapse'))}.</div>`;
+  if (data.next_page_url) {
+    const loaded = data.results.length;
+    html += `<div class="scroll-sentinel"
+      data-page-url="${esc(data.next_page_url)}"
+      data-query="${esc(data.query)}"
+      data-search-type="${esc(data.search_type)}"
+      data-scope="${esc(data.scope)}"
+      data-sort="${esc(data.sort || 'D')}"
+      data-page="${(data.page || 1) + 1}"
+      data-city="${esc(data._city || '')}"
+      data-branch="${esc(data._branch || '')}">
+      <span class="scroll-loading-indicator">⏳</span>
+    </div>`;
+  } else if (data.total > 12) {
+    html += `<div class="pagination-bar"><span class="pagination-count">${data.total} ${esc(t('results_total'))}</span></div>`;
   }
   html += '</section>';
   return html;
@@ -543,6 +558,63 @@ function renderStatusPill(status) {
 }
 
 function bindResultActions() {
+  // Infinite scroll: observe each .scroll-sentinel; when it enters the
+  // viewport, fetch the next page and append cards automatically.
+  const observeSentinels = () => {
+    const sentinels = document.querySelectorAll('.scroll-sentinel:not([data-observed])');
+    console.log(`[app] observeSentinels: found ${sentinels.length} unobserved sentinel(s)`);
+    sentinels.forEach(sentinel => {
+      sentinel.dataset.observed = '1';
+      console.log(`[app] IntersectionObserver registered for sentinel page=${sentinel.dataset.page} url=${(sentinel.dataset.pageUrl || '').slice(-60)}`);
+      const observer = new IntersectionObserver(async (entries) => {
+        const entry = entries[0];
+        console.log(`[app] IntersectionObserver callback: isIntersecting=${entry.isIntersecting} page=${sentinel.dataset.page}`);
+        if (!entry.isIntersecting) return;
+        observer.disconnect();
+        sentinel.querySelector('.scroll-loading-indicator').textContent = '⏳';
+        try {
+          const pageUrl    = sentinel.dataset.pageUrl;
+          const query      = sentinel.dataset.query;
+          const searchType = sentinel.dataset.searchType;
+          const scope      = sentinel.dataset.scope;
+          const sort       = sentinel.dataset.sort || 'D';
+          const page       = parseInt(sentinel.dataset.page, 10);
+          const city       = sentinel.dataset.city || '';
+          const branch     = sentinel.dataset.branch || '';
+          console.log(`[app] infinite scroll: fetching page=${page} url=${pageUrl.slice(-80)}`);
+          const data = await client.searchPage(pageUrl, query, searchType, scope, sort, page, city, branch);
+          console.log(`[app] infinite scroll: got ${data.results.length} results, next=${data.next_page_url ? 'YES' : 'none'}`);
+          data._city = city;
+          data._branch = branch;
+
+          // Append new cards into the existing grid
+          const section = sentinel.closest('.results-section');
+          const grid = section.querySelector('.book-grid');
+          const tmp = document.createElement('div');
+          tmp.innerHTML = renderGridResults(data);
+          const newGrid = tmp.querySelector('.book-grid');
+          if (newGrid) grid.insertAdjacentHTML('beforeend', newGrid.innerHTML);
+
+          // Replace sentinel with the new one (or remove if last page)
+          const newSentinel = tmp.querySelector('.scroll-sentinel');
+          if (newSentinel) sentinel.replaceWith(newSentinel);
+          else sentinel.remove();
+
+          // Update displayed count
+          const countEl = section.querySelector('.results-count strong');
+          if (countEl) countEl.textContent = section.querySelectorAll('.book-card').length;
+
+          bindResultActions(); // observe the new sentinel
+        } catch (err) {
+          console.error(`[app] infinite scroll error:`, err);
+          sentinel.querySelector('.scroll-loading-indicator').textContent = '⚠ ' + err.message;
+        }
+      }, { rootMargin: '200px' }); // trigger 200px before reaching bottom
+      observer.observe(sentinel);
+    });
+  };
+  observeSentinels();
+
   document.querySelectorAll('.btn-inline-reserve').forEach(btn => {
     btn.addEventListener('click', async () => {
       const bibId = btn.dataset.bib;

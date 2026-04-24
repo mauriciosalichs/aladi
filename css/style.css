@@ -453,6 +453,31 @@ img { display: block; max-width: 100%; }
   color: var(--gray-400);
   font-size: .85rem;
 }
+.pagination-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 1.5rem;
+  flex-wrap: wrap;
+}
+.pagination-count {
+  color: var(--gray-400);
+  font-size: .85rem;
+}
+.scroll-sentinel {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 2rem;
+  color: var(--gray-400);
+  font-size: 1.4rem;
+}
+.scroll-loading-indicator {
+  animation: spin 1s linear infinite;
+  display: inline-block;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
 
 /* ============================================================
    BOOK DETAIL PAGE
