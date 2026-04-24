@@ -53,6 +53,9 @@ async function proxyFetch(targetUrl, options = {}) {
   if (options.body) {
     fetchOpts.body = options.body;
   }
+  if (options.signal) {
+    fetchOpts.signal = options.signal;
+  }
 
   const resp = await fetch(proxyUrl, fetchOpts);
 
@@ -268,10 +271,10 @@ function buildSearchUrl(query, searchType, scope, sort, branch, city) {
   return { url, effectiveScope, searchArg };
 }
 
-export async function search(query, searchType = 'X', scope = '171', sort = 'D', page = 1, availableOnly = false, city = '', branch = '') {
+export async function search(query, searchType = 'X', scope = '171', sort = 'D', page = 1, availableOnly = false, city = '', branch = '', signal = null) {
   console.log(`[aladi] \n\nsearch(query="${query}", type=${searchType}, scope=${scope}, sort=${sort}, availableOnly=${availableOnly}, city="${city}", branch="${branch}")\n\n`);
   const { url, effectiveScope, searchArg } = buildSearchUrl(query, searchType, scope, sort, branch, city);
-  const resp = await proxyFetch(url);
+  const resp = await proxyFetch(url, { signal });
   console.log(`[aladi] search response status=${resp.status} finalUrl=${resp.finalUrl}`);
   const data = parseResults(resp.text, query, searchType, effectiveScope, page, searchArg);
   console.log(`[aladi] search parsed: total=${data.total} results=${data.results.length} isBrowse=${data.is_browse}`);
@@ -309,20 +312,20 @@ export async function search(query, searchType = 'X', scope = '171', sort = 'D',
   return data;
 }
 
-export async function collapseSearch(query, searchType = 'X', scope = '171', sort = 'D', availableOnly = false, city = '', branch = '') {
+export async function collapseSearch(query, searchType = 'X', scope = '171', sort = 'D', availableOnly = false, city = '', branch = '', signal = null) {
   console.log(`[aladi] collapseSearch(query="${query}", type=${searchType}, scope=${scope}, city="${city}", branch="${branch}")`);
 
   // Fetch page 1, then follow next_page_url links to collect all editions.
   // Cap at MAX_COLLAPSE_PAGES to avoid runaway requests on huge result sets.
   const MAX_COLLAPSE_PAGES = 5; // up to 60 editions
-  const firstPage = await search(query, searchType, scope, sort, 1, false, city, branch);
+  const firstPage = await search(query, searchType, scope, sort, 1, false, city, branch, signal);
   let allBooks = firstPage.results.filter(b => b.bib_id && !b.is_browse_entry);
   let nextUrl = firstPage.next_page_url;
   let pageNum = 2;
 
   while (nextUrl && pageNum <= MAX_COLLAPSE_PAGES) {
     console.log(`[aladi] collapseSearch fetching page ${pageNum}: ${nextUrl.slice(-50)}`);
-    const pageData = await searchPage(nextUrl, query, searchType, firstPage.scope, sort, pageNum, city, branch);
+    const pageData = await searchPage(nextUrl, query, searchType, firstPage.scope, sort, pageNum, city, branch, signal);
     allBooks = allBooks.concat(pageData.results.filter(b => b.bib_id && !b.is_browse_entry));
     nextUrl = pageData.next_page_url;
     pageNum++;
@@ -336,7 +339,7 @@ export async function collapseSearch(query, searchType = 'X', scope = '171', sor
   // Fetch hold forms in parallel
   const formPromises = books.map(async (book) => {
     try {
-      const form = await getHoldForm(book.bib_id);
+      const form = await getHoldForm(book.bib_id, signal);
       if (!form) return [];
       return form.copies.map(copy => ({
         library: copy.location,
@@ -414,9 +417,9 @@ export async function collapseSearch(query, searchType = 'X', scope = '171', sor
  * a previous page's HTML. Requires the same session cookies that were set
  * during the original search() call — the proxy maintains these automatically.
  */
-export async function searchPage(pageUrl, query, searchType, scope, sort, page, city = '', branch = '') {
+export async function searchPage(pageUrl, query, searchType, scope, sort, page, city = '', branch = '', signal = null) {
   console.log(`[aladi] searchPage(page=${page}) → ${pageUrl}`);
-  const resp = await proxyFetch(pageUrl);
+  const resp = await proxyFetch(pageUrl, { signal });
   const prefix = FIELD_PREFIX[searchType] ?? '';
   const searchArg = prefix + query;
   const data = parseResults(resp.text, query, searchType, scope, page, searchArg);
@@ -848,11 +851,11 @@ export async function cancelHold(holdId) {
 
 // ── Hold / Reserve ─────────────────────────────────────────────────
 
-export async function getHoldForm(bibId) {
+export async function getHoldForm(bibId, signal = null) {
   const url = `${BASE_URL}/search~S${SCOPE}?/.${bibId}/.${bibId}/1%2C1%2C1%2CB/request~${bibId}`;
   let resp;
   try {
-    resp = await proxyFetch(url);
+    resp = await proxyFetch(url, { signal });
   } catch {
     return null;
   }

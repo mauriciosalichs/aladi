@@ -16,6 +16,14 @@ function esc(s) {
   return d.innerHTML;
 }
 
+function libMapsUrl(name) {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name + ' biblioteca')}`;
+}
+
+function libLink(name) {
+  return `<a href="${libMapsUrl(name)}" target="_blank" rel="noopener" class="lib-maps-link">${esc(name)}</a>`;
+}
+
 function flash(message, category = 'info') {
   const container = document.getElementById('flash-container');
   const el = document.createElement('div');
@@ -102,7 +110,7 @@ function renderNav() {
       setLang(btn.dataset.lang);
       const cfg2 = loadConfig();
       saveConfig({ ...cfg2, language: btn.dataset.lang });
-      route(); // Re-render current view
+      route(true); // Re-render current view without re-triggering search
     });
   });
 }
@@ -237,7 +245,7 @@ function renderSettings() {
 }
 
 // ── SEARCH ──
-function renderSearch() {
+function renderSearch(skipSearch = false) {
   currentView = 'search';
   setTitle(t('search_page_title'));
   renderNav();
@@ -376,14 +384,34 @@ function renderSearch() {
     navigate(hashUrl);
   });
 
-  if (query) {
+  if (query && !skipSearch) {
     doSearch(query, searchType, scope, sort, availableOnly, collapseEditions, city, branch);
   }
 }
 
+// Active search abort controller — cancelled when a new search starts or user cancels
+let _searchAbort = null;
+
 async function doSearch(query, searchType, scope, sort, availableOnly, collapseEditions, city = '', branch = '') {
+  // Cancel any in-flight search
+  if (_searchAbort) { _searchAbort.abort(); }
+  _searchAbort = new AbortController();
+  const signal = _searchAbort.signal;
+
   const container = document.getElementById('results-container');
-  container.innerHTML = '<div class="empty-state"><div class="empty-icon">⏳</div><p>Searching…</p></div>';
+  container.innerHTML = `
+    <div class="search-loading">
+      <span class="search-loading__spinner">⏳</span>
+      <button type="button" id="cancel-search-btn" class="btn-cancel-search">${esc(t('search_cancel_btn'))}</button>
+    </div>`;
+  container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  document.getElementById('cancel-search-btn').addEventListener('click', () => {
+    _searchAbort.abort();
+    _searchAbort = null;
+    container.innerHTML = '';
+    document.querySelector('.search-hero')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
 
   console.log(`[app] doSearch query="${query}" type=${searchType} scope=${scope} sort=${sort} availableOnly=${availableOnly} collapse=${collapseEditions} city="${city}" branch="${branch}"`);
   // Save preferences
@@ -401,17 +429,19 @@ async function doSearch(query, searchType, scope, sort, availableOnly, collapseE
     let data;
     if (collapseEditions) {
       console.log(`[app] using collapseSearch`);
-      data = await client.collapseSearch(query, searchType, scope, sort, availableOnly, city, branch);
+      data = await client.collapseSearch(query, searchType, scope, sort, availableOnly, city, branch, signal);
     } else {
       console.log(`[app] using search`);
-      data = await client.search(query, searchType, scope, sort, 1, availableOnly, city, branch);
+      data = await client.search(query, searchType, scope, sort, 1, availableOnly, city, branch, signal);
     }
+    if (signal.aborted) return; // user cancelled between last fetch and render
     console.log(`[app] results received: total=${data.total ?? data.total_results} collapsed=${!!data.collapsed}`);
     data._city = city;
     data._branch = branch;
     container.innerHTML = renderResults(data);
     bindResultActions();
   } catch (err) {
+    if (err.name === 'AbortError') return; // silent cancel
     console.error(`[app] doSearch error:`, err);
     container.innerHTML = `<div class="empty-state"><div class="empty-icon">❌</div><h2>Error</h2><p>${esc(err.message)}</p></div>`;
   }
@@ -456,7 +486,7 @@ function renderCollapsedResults(data) {
       <th>${esc(t('col_callno'))}</th><th>${esc(t('col_status'))}</th><th>${esc(t('col_reserve'))}</th>
     </tr></thead><tbody>`;
     for (const [library, copies] of data.grouped_copies) {
-      html += `<tr class="lib-group-row"><td colspan="6" class="lib-group-name">📍 ${esc(library)}</td></tr>`;
+      html += `<tr class="lib-group-row"><td colspan="6" class="lib-group-name">📍 ${libLink(library)}</td></tr>`;
       for (const copy of copies) {
         const rowClass = copy.status === 'Available' ? 'avail-row--green' : (copy.status.includes('DUE') || copy.status.toLowerCase().includes('loan') ? 'avail-row--red' : 'avail-row--gray');
         html += `<tr class="avail-row ${rowClass}">
@@ -480,7 +510,7 @@ function renderCollapsedResults(data) {
       for (const copy of book.copies) {
         const rowClass = copy.status === 'Available' ? 'avail-row--green' : (copy.status.includes('DUE') || copy.status.toLowerCase().includes('loan') ? 'avail-row--red' : 'avail-row--gray');
         html += `<tr class="avail-row ${rowClass}">
-          <td data-col="${esc(t('col_library'))}">${esc(copy.library)}</td>
+          <td data-col="${esc(t('col_library'))}">${libLink(copy.library)}</td>
           <td data-col="${esc(t('col_type'))}"><small class="media-badge">${esc(copy.media_type)}</small></td>
           <td data-col="${esc(t('col_callno'))}">${esc(copy.call_number)}</td>
           <td data-col="${esc(t('col_status'))}">${renderStatusPill(copy.status)}</td>
@@ -739,7 +769,7 @@ async function renderBookDetail(bibId) {
       for (const item of book.availability) {
         const rowClass = item.status === 'Available' ? 'avail-row--green' : (item.status.includes('DUE') || item.status.toLowerCase().includes('loan') ? 'avail-row--red' : 'avail-row--gray');
         html += `<tr class="avail-row ${rowClass}">
-          <td data-col="${esc(t('col_location'))}">${esc(item.location)}</td>
+          <td data-col="${esc(t('col_location'))}">${libLink(item.location)}</td>
           <td data-col="${esc(t('col_callno'))}">${esc(item.call_number)}</td>
           <td data-col="${esc(t('col_status'))}">${renderStatusPill(item.status)}</td>
           <td data-col="${esc(t('col_notes'))}">${esc(item.notes)}</td>
@@ -785,9 +815,8 @@ async function renderAccount() {
     html += `<section class="account-section"><h2 class="account-section__title">${esc(t('account_loans'))}</h2>`;
     if (items.length) {
       html += `<div class="avail-table-wrap"><table class="avail-table"><thead><tr>
-        <th>${esc(t('account_col_title'))}</th><th>${esc(t('account_col_barcode'))}</th>
-        <th>${esc(t('account_col_due'))}</th><th>${esc(t('account_col_renewals'))}</th>
-        <th>${esc(t('account_col_callno'))}</th></tr></thead><tbody>`;
+        <th>${esc(t('account_col_title'))}</th>
+        <th>${esc(t('account_col_due'))}</th></tr></thead><tbody>`;
       for (const item of items) {
         html += `<tr><td data-col="${esc(t('account_col_title'))}">`;
         if (item.bib_id) {
@@ -795,11 +824,10 @@ async function renderAccount() {
         } else {
           html += esc(item.title);
         }
-        html += `</td><td data-col="${esc(t('account_col_barcode'))}">${esc(item.barcode)}</td><td data-col="${esc(t('account_col_due'))}">`;
+        html += `</td><td data-col="${esc(t('account_col_due'))}">`;
         if (item.due_date) html += `<span class="status-pill status-pill--orange">📅 ${esc(item.due_date)}</span>`;
-        html += '</td><td>';
-        html += item.renewed ? `<span class="chip chip--year">${esc(item.renewed)}</span>` : '—';
-        html += `</td><td data-col="${esc(t('account_col_callno'))}">${esc(item.call_number)}</td></tr>`;
+        if (item.renewed && item.renewed !== '—') html += ` <span class="chip chip--year">${esc(item.renewed)}</span>`;
+        html += `</td></tr>`;
       }
       html += '</tbody></table></div>';
     } else {
@@ -829,7 +857,7 @@ async function renderAccount() {
         } else {
           html += `<span class="status-pill status-pill--orange">⏳ ${esc(hold.status)}</span>`;
         }
-        html += `</td><td data-col="${esc(t('account_col_pickup'))}">${esc(hold.pickup)}</td><td data-col="${esc(t('account_col_cancelby'))}">${esc(hold.cancel_by)}</td><td>`;
+        html += `</td><td data-col="${esc(t('account_col_pickup'))}">${libLink(hold.pickup)}</td><td data-col="${esc(t('account_col_cancelby'))}">${esc(hold.cancel_by)}</td><td>`;
         if (hold.hold_id) {
           html += `<button type="button" class="btn-cancel-hold" data-hold="${esc(hold.hold_id)}">${esc(t('account_cancel_hold_btn'))}</button>`;
         }
@@ -1013,7 +1041,7 @@ function doLogout() {
 
 // ── Router ──────────────────────────────────────────────────────────
 
-function route() {
+function route(skipSearch = false) {
   renderFooter();
 
   const hash = window.location.hash || '#/';
@@ -1044,7 +1072,7 @@ function route() {
     return;
   }
 
-  if (path === '#/search') { renderSearch(); return; }
+  if (path === '#/search') { renderSearch(skipSearch); return; }
   if (path === '#/account') { renderAccount(); return; }
 
   const bookMatch = path.match(/^#\/book\/(.+)$/);
@@ -1059,7 +1087,7 @@ function route() {
 
 // ── Init ────────────────────────────────────────────────────────────
 
-window.addEventListener('hashchange', route);
+window.addEventListener('hashchange', () => route());
 window.addEventListener('DOMContentLoaded', () => {
   route();
 });
