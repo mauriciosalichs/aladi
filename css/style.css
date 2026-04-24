@@ -6,32 +6,37 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --brand: #1d4ed8;
+  --brand: #3b82f6;
   --brand-dark: #1e3a8a;
-  --brand-light: #dbeafe;
-  --green: #16a34a;
-  --green-light: #dcfce7;
-  --orange: #ea580c;
-  --orange-light: #ffedd5;
-  --red: #dc2626;
-  --blue: #2563eb;
-  --blue-light: #dbeafe;
-  --gray-50: #f8fafc;
-  --gray-100: #f1f5f9;
-  --gray-200: #e2e8f0;
-  --gray-400: #94a3b8;
-  --gray-600: #475569;
-  --gray-700: #334155;
-  --gray-900: #0f172a;
+  --brand-light: #0c1e3a;
+  --green: #22c55e;
+  --green-light: #0d2818;
+  --orange: #fb923c;
+  --orange-light: #2a1500;
+  --red: #f87171;
+  --blue: #60a5fa;
+  --blue-light: #0c1e3a;
+  --gray-50: #0d1117;
+  --gray-100: #161b22;
+  --gray-200: #21262d;
+  --gray-400: #8b949e;
+  --gray-600: #8b949e;
+  --gray-700: #c9d1d9;
+  --gray-900: #f0f6fc;
   --radius: 10px;
   --radius-sm: 6px;
-  --shadow: 0 1px 3px rgba(0,0,0,.10), 0 4px 12px rgba(0, 0,0,.06);
-  --shadow-md: 0 4px 20px rgba(0,0,0,.12);
+  --shadow: 0 1px 3px rgba(0,0,0,.40), 0 4px 12px rgba(0,0,0,.30);
+  --shadow-md: 0 4px 20px rgba(0,0,0,.50);
   --transition: .18s ease;
+  /* surface levels */
+  --surface-0: #0d1117;
+  --surface-1: #161b22;
+  --surface-2: #21262d;
 }
 
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color-scheme: dark;
   background: var(--gray-50);
   color: var(--gray-900);
   min-height: 100vh;
@@ -137,10 +142,10 @@ img { display: block; max-width: 100%; }
   font-size: .9rem;
   font-weight: 500;
 }
-.flash--success { background: var(--green-light); color: var(--green); }
-.flash--danger  { background: #fee2e2; color: var(--red); }
-.flash--warning { background: var(--orange-light); color: var(--orange); }
-.flash--info    { background: var(--blue-light); color: var(--blue); }
+.flash--success { background: var(--green-light);  color: #4ade80; }
+.flash--danger  { background: #2a0a0a;              color: #f87171; }
+.flash--warning { background: var(--orange-light); color: #fb923c; }
+.flash--info    { background: var(--blue-light);   color: #93c5fd; }
 
 /* ---- Main & Footer ---- */
 .main {
@@ -191,7 +196,7 @@ img { display: block; max-width: 100%; }
   padding: 2rem 1rem;
 }
 .login-card {
-  background: #fff;
+  background: var(--surface-1);
   border: 1px solid var(--gray-200);
   border-radius: var(--radius);
   box-shadow: var(--shadow-md);
@@ -208,7 +213,7 @@ img { display: block; max-width: 100%; }
   font-size: 1.4rem;
   font-weight: 700;
   text-align: center;
-  color: var(--brand-dark);
+  color: var(--brand);
   margin-bottom: .25rem;
 }
 .login-subtitle {
@@ -225,6 +230,8 @@ img { display: block; max-width: 100%; }
   border: 1.5px solid var(--gray-200);
   border-radius: var(--radius-sm);
   font-size: 1rem;
+  background: var(--surface-2);
+  color: var(--gray-900);
   transition: border-color var(--transition), box-shadow var(--transition);
   outline: none;
 }
@@ -269,7 +276,9 @@ img { display: block; max-width: 100%; }
   border: none;
   font-size: 1.05rem;
   outline: none;
-  box-shadow: 0 0 0 2px rgba(255,255,255,.4);
+  background: rgba(13,17,23,.6);
+  color: #f0f6fc;
+  box-shadow: 0 0 0 2px rgba(255,255,255,.25);
   transition: box-shadow var(--transition);
 }
 .search-input:focus {
@@ -326,7 +335,7 @@ img { display: block; max-width: 100%; }
 }
 
 .book-card {
-  background: #fff;
+  background: var(--surface-1);
   border: 1px solid var(--gray-200);
   border-radius: var(--radius);
   overflow: hidden;
@@ -418,9 +427,9 @@ img { display: block; max-width: 100%; }
   border-radius: 999px;
   margin-top: auto;
 }
-.avail-pill--green { background: var(--green-light); color: var(--green); }
-.avail-pill--orange { background: var(--orange-light); color: var(--orange); }
-.avail-pill--blue { background: var(--blue-light); color: var(--blue); }
+.avail-pill--green  { background: var(--green-light);  color: #4ade80; }
+.avail-pill--orange { background: var(--orange-light); color: #fb923c; }
+.avail-pill--blue   { background: var(--blue-light);   color: #93c5fd; }
 
 /* Empty state */
 .empty-state {
@@ -431,21 +440,6 @@ img { display: block; max-width: 100%; }
 .empty-state--small { padding: 2rem; }
 .empty-icon { font-size: 3.5rem; margin-bottom: .75rem; }
 .empty-state h2 { font-size: 1.2rem; color: var(--gray-700); margin-bottom: .5rem; }
-
-/* Landing tips */
-.landing-tips { padding: 2rem 0; }
-.tips-title { font-size: 1.2rem; font-weight: 700; color: var(--gray-700); margin-bottom: 1.25rem; text-align: center; }
-.tips-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; }
-.tip-card {
-  background: #fff;
-  border: 1px solid var(--gray-200);
-  border-radius: var(--radius);
-  padding: 1.5rem 1.25rem;
-  text-align: center;
-}
-.tip-icon { font-size: 2rem; margin-bottom: .75rem; }
-.tip-card h3 { font-size: .95rem; font-weight: 600; margin-bottom: .4rem; }
-.tip-card p { font-size: .85rem; color: var(--gray-600); }
 
 .pagination-note {
   text-align: center;
@@ -460,6 +454,26 @@ img { display: block; max-width: 100%; }
   gap: 1rem;
   padding: 1.5rem;
   flex-wrap: wrap;
+}
+.collapse-sort-toggle {
+  display: flex;
+  gap: .4rem;
+}
+.collapse-sort-btn {
+  background: transparent;
+  border: 1px solid var(--gray-600);
+  color: var(--gray-700);
+  border-radius: 6px;
+  padding: .3rem .9rem;
+  font-size: .8rem;
+  cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.collapse-sort-btn.active,
+.collapse-sort-btn:hover {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
 }
 .pagination-count {
   color: var(--gray-400);
@@ -526,9 +540,9 @@ img { display: block; max-width: 100%; }
   font-weight: 600;
   font-size: .9rem;
 }
-.avail-badge--green { background: var(--green-light); color: var(--green); }
-.avail-badge--orange { background: var(--orange-light); color: var(--orange); }
-.avail-badge--gray { background: var(--gray-100); color: var(--gray-600); }
+.avail-badge--green  { background: var(--green-light);  color: #4ade80; }
+.avail-badge--orange { background: var(--orange-light); color: #fb923c; }
+.avail-badge--gray   { background: var(--gray-200);     color: var(--gray-700); }
 
 .detail-title {
   font-size: 1.65rem;
@@ -544,8 +558,8 @@ img { display: block; max-width: 100%; }
   border-radius: 999px;
   font-weight: 500;
 }
-.chip--author { background: var(--blue-light); color: var(--blue); }
-.chip--year { background: var(--gray-100); color: var(--gray-600); }
+.chip--author { background: var(--blue-light); color: #93c5fd; }
+.chip--year   { background: var(--gray-200);   color: var(--gray-700); }
 
 .detail-section-title {
   font-size: 1rem;
@@ -611,8 +625,8 @@ img { display: block; max-width: 100%; }
   vertical-align: middle;
 }
 .avail-table tr:last-child td { border-bottom: none; }
-.avail-row--green { background: rgba(22, 163, 74, .04); }
-.avail-row--red   { background: rgba(220, 38,  38, .04); }
+.avail-row--green { background: rgba(34, 197, 94,  .10); }
+.avail-row--red   { background: rgba(248, 113, 113, .10); }
 .table-link { color: var(--brand); font-weight: 500; }
 .table-link:hover { text-decoration: underline; }
 
@@ -623,10 +637,10 @@ img { display: block; max-width: 100%; }
   padding: .2rem .6rem;
   border-radius: 999px;
 }
-.status-pill--green  { background: var(--green-light); color: var(--green); }
-.status-pill--orange { background: var(--orange-light); color: var(--orange); }
-.status-pill--blue   { background: var(--blue-light); color: var(--blue); }
-.status-pill--gray   { background: var(--gray-100); color: var(--gray-600); }
+.status-pill--green  { background: var(--green-light);  color: #4ade80; }
+.status-pill--orange { background: var(--orange-light); color: #fb923c; }
+.status-pill--blue   { background: var(--blue-light);   color: #93c5fd; }
+.status-pill--gray   { background: var(--gray-200);     color: var(--gray-700); }
 
 /* ============================================================
    ACCOUNT PAGE
@@ -634,7 +648,7 @@ img { display: block; max-width: 100%; }
 .account-page { max-width: 860px; }
 .page-title { font-size: 1.6rem; font-weight: 700; margin-bottom: .25rem; }
 .page-subtitle { color: var(--gray-600); margin-bottom: 2rem; }
-.account-section { margin-bottom: 2.5rem; }
+.account-section { margin-bottom: 2.5rem; width: 100%; }
 .account-section__title {
   font-size: 1.05rem;
   font-weight: 700;
@@ -687,6 +701,8 @@ img { display: block; max-width: 100%; }
   border-radius: var(--radius-sm);
   font-size: .95rem;
   outline: none;
+  background: var(--surface-2);
+  color: var(--gray-900);
   transition: border-color var(--transition);
 }
 .filter-input:focus { border-color: var(--green); }
@@ -726,7 +742,7 @@ img { display: block; max-width: 100%; }
 .copies-table tr:last-child td { border-bottom: none; }
 .copy-available { background: rgba(22, 163, 74, .03); }
 .copy-onloan { background: transparent; }
-.copy-row:hover { background: var(--brand-light); cursor: pointer; }
+.copy-row:hover { background: rgba(59,130,246,.15); cursor: pointer; }
 
 /* Custom radio */
 .radio-label {
@@ -873,15 +889,113 @@ img { display: block; max-width: 100%; }
   .book-card__body { padding: .6rem; }
   .book-card__title { font-size: .82rem; }
 
-  /* --- Tables: horizontal scroll --- */
+  /* ─── Tables → Cards (phone) ───────────────────────────────────────
+     Turn every <table> inside .avail-table-wrap / .copies-table-wrap
+     into a stack of cards — one card per <tr>.
+     We use nth-child on <td> to inject column labels via ::before.
+  ──────────────────────────────────────────────────────────────────── */
+
+  /* Unwrap the scrollable container, remove table chrome */
   .avail-table-wrap,
   .copies-table-wrap {
-    -webkit-overflow-scrolling: touch;
+    border: none;
+    border-radius: 0;
+    overflow: visible;
+    background: transparent;
   }
   .avail-table,
   .copies-table {
-    min-width: 500px;
+    display: block;
+    min-width: unset;
+    width: 100%;
   }
+  .avail-table thead,
+  .copies-table thead {
+    display: none; /* hide column headers — labels shown via ::before */
+  }
+  .avail-table tbody,
+  .copies-table tbody {
+    display: flex;
+    flex-direction: column;
+    gap: .6rem;
+  }
+
+  /* ── Group header rows (library / book name) stay full-width banners */
+  .avail-table .lib-group-row {
+    display: block;
+    width: 100%;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+  }
+  .avail-table .lib-group-row td {
+    display: block !important;
+    width: 100%;
+    padding: .55rem .85rem !important;
+  }
+
+  /* ── Data rows → cards */
+  .avail-table tr.avail-row,
+  .copies-table tr {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: .3rem .75rem;
+    background: var(--surface-1);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius);
+    padding: .75rem .85rem;
+    position: relative;
+  }
+  /* colour tints still apply */
+  .avail-table tr.avail-row--green { background: rgba(34,197,94,.08); border-color: rgba(34,197,94,.25); }
+  .avail-table tr.avail-row--red   { background: rgba(248,113,113,.08); border-color: rgba(248,113,113,.25); }
+
+  .avail-table td,
+  .copies-table td {
+    display: flex;
+    flex-direction: column;
+    gap: .18rem;
+    font-size: .83rem;
+    padding: 0;
+    border: none;
+    vertical-align: unset;
+  }
+
+  /* Label injected before each cell's content — removed, data speaks for itself */
+  .avail-table td::before,
+  .copies-table td::before {
+    content: none;
+  }
+
+  /* ── avail-table shared: col 1 (title/edition/location) → full width header */
+  .avail-table tr.avail-row td:nth-child(1) { grid-column: 1 / -1; font-weight: 600; font-size: .88rem; }
+  /* col 2 = type/barcode */
+  .avail-table tr.avail-row td:nth-child(2) { grid-column: 1; }
+  /* col 3 = call#/due */
+  .avail-table tr.avail-row td:nth-child(3) { grid-column: 2; }
+  /* col 4 = status/renewals */
+  .avail-table tr.avail-row td:nth-child(4) { grid-column: 1; }
+  /* col 5 = reserve/call# → bottom right */
+  .avail-table tr.avail-row td:nth-child(5) { grid-column: 2; align-items: flex-end; }
+
+  /* account loans: title full width, rest in 2 cols; more spacing + bolder border */
+  .account-section .avail-table tbody { gap: .85rem; }
+  .account-section .avail-table tr {
+    border-color: var(--gray-400);
+    border-width: 1.5px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.3);
+    padding: 1rem;
+  }
+  .account-section .avail-table tr td:nth-child(1) { grid-column: 1 / -1; font-weight: 600; font-size: .88rem; }
+  .account-section .avail-table tr td:nth-child(2) { grid-column: 1; }
+  .account-section .avail-table tr td:nth-child(3) { grid-column: 2; }
+  .account-section .avail-table tr td:nth-child(4) { grid-column: 1; }
+  .account-section .avail-table tr td:nth-child(5) { grid-column: 2; }
+
+  /* copies-table (reserve page): select · call# · status · notes */
+  .copies-table tr td:nth-child(1) { grid-column: 1; align-self: center; }
+  .copies-table tr td:nth-child(2) { grid-column: 2; }
+  .copies-table tr td:nth-child(3) { grid-column: 1 / -1; }
+  .copies-table tr td:nth-child(4) { grid-column: 1 / -1; }
 
   /* --- Detail page --- */
   .detail-aside {
@@ -968,7 +1082,7 @@ img { display: block; max-width: 100%; }
 
 .lib-group-row { }
 .lib-group-name {
-  background: var(--brand-dark);
+  background: var(--brand-light);
   color: #fff;
   font-size: .8rem;
   font-weight: 700;

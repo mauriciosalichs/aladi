@@ -335,9 +335,6 @@ function renderSearch() {
     </form></section>`;
 
   html += '<div id="results-container">';
-  if (!query) {
-    html += renderLandingTips();
-  }
   html += '</div></div>';
 
   document.getElementById('app-content').innerHTML = html;
@@ -433,41 +430,62 @@ function renderCollapsedResults(data) {
   const nLibs = data.grouped_copies.length;
   const nCopies = data.copies.length;
 
-  let html = `<section class="results-section"><div class="results-header"><span class="results-count">
-    <strong>${data.editions_fetched}</strong> ${data.editions_fetched !== 1 ? t('results_editions') : t('results_edition')}
-    ${t('results_of')} <em>"${esc(data.query)}"</em> —
-    <strong>${nCopies}</strong> ${nCopies !== 1 ? t('results_copies') : t('results_copy')}
-    ${t('results_at')} <strong>${nLibs}</strong> ${nLibs !== 1 ? t('results_libraries') : t('results_library')}`;
+  let html = `<section class="results-section"><div class="results-header">
+    <span class="results-count">
+      <strong>${data.editions_fetched}</strong> ${data.editions_fetched !== 1 ? t('results_editions') : t('results_edition')}
+      ${t('results_of')} <em>"${esc(data.query)}"</em> —
+      <strong>${nCopies}</strong> ${nCopies !== 1 ? t('results_copies') : t('results_copy')}
+      ${t('results_at')} <strong>${nLibs}</strong> ${nLibs !== 1 ? t('results_libraries') : t('results_library')}`;
 
   if (data.total_results > 12) {
     html += ` <small class="results-note">(${t('results_first_12')} · ${data.total_results} ${t('results_total')})</small>`;
   }
-  html += '</span></div>';
+  html += `</span>
+    <div class="collapse-sort-toggle">
+      <button class="collapse-sort-btn active" data-sort="library">${esc(t('collapse_sort_library'))}</button>
+      <button class="collapse-sort-btn" data-sort="book">${esc(t('collapse_sort_book'))}</button>
+    </div>
+  </div>`;
 
   if (nCopies === 0) {
     html += `<div class="empty-state"><div class="empty-icon">📭</div><h2>${esc(t('results_no_copies_title'))}</h2><p>${esc(t('results_no_copies_hint'))}</p></div>`;
   } else {
-    html += `<div class="avail-table-wrap collapse-table-wrap"><table class="avail-table"><thead><tr>
+    // ── By-library table (shown by default) ──────────────────────────
+    html += `<div class="avail-table-wrap collapse-table-wrap" data-view="library"><table class="avail-table"><thead><tr>
       <th>${esc(t('col_library'))}</th><th>${esc(t('col_edition'))}</th><th>${esc(t('col_type'))}</th>
       <th>${esc(t('col_callno'))}</th><th>${esc(t('col_status'))}</th><th>${esc(t('col_reserve'))}</th>
     </tr></thead><tbody>`;
-
     for (const [library, copies] of data.grouped_copies) {
       html += `<tr class="lib-group-row"><td colspan="6" class="lib-group-name">📍 ${esc(library)}</td></tr>`;
       for (const copy of copies) {
         const rowClass = copy.status === 'Available' ? 'avail-row--green' : (copy.status.includes('DUE') || copy.status.toLowerCase().includes('loan') ? 'avail-row--red' : 'avail-row--gray');
-        html += `<tr class="avail-row ${rowClass}"><td></td>
-          <td><a href="#/book/${copy.bib_id}" class="table-link">${esc(copy.edition_title)}</a></td>
-          <td><small class="media-badge">${esc(copy.media_type)}</small></td>
-          <td>${esc(copy.call_number)}</td>
-          <td>${renderStatusPill(copy.status)}</td>
-          <td>`;
-        if (copy.item_id) {
-          html += `<button type="button" class="btn-inline-reserve" data-bib="${esc(copy.bib_id)}" data-item="${esc(copy.item_id)}">${esc(t('col_reserve'))}</button>`;
-        } else {
-          html += '<span class="reserve-na">—</span>';
-        }
-        html += '</td></tr>';
+        html += `<tr class="avail-row ${rowClass}">
+          <td data-col="${esc(t('col_edition'))}"><a href="#/book/${copy.bib_id}" class="table-link">${esc(copy.edition_title)}</a></td>
+          <td data-col="${esc(t('col_type'))}"><small class="media-badge">${esc(copy.media_type)}</small></td>
+          <td data-col="${esc(t('col_callno'))}">${esc(copy.call_number)}</td>
+          <td data-col="${esc(t('col_status'))}">${renderStatusPill(copy.status)}</td>
+          <td data-col="${esc(t('col_reserve'))}">${copy.item_id ? `<button type="button" class="btn-inline-reserve" data-bib="${esc(copy.bib_id)}" data-item="${esc(copy.item_id)}">${esc(t('col_reserve'))}</button>` : '<span class="reserve-na">—</span>'}</td>
+        </tr>`;
+      }
+    }
+    html += '</tbody></table></div>';
+
+    // ── By-book table (hidden by default) ────────────────────────────
+    html += `<div class="avail-table-wrap collapse-table-wrap" data-view="book" style="display:none"><table class="avail-table"><thead><tr>
+      <th>${esc(t('col_edition'))}</th><th>${esc(t('col_library'))}</th><th>${esc(t('col_type'))}</th>
+      <th>${esc(t('col_callno'))}</th><th>${esc(t('col_status'))}</th><th>${esc(t('col_reserve'))}</th>
+    </tr></thead><tbody>`;
+    for (const book of (data.grouped_by_book || [])) {
+      html += `<tr class="lib-group-row"><td colspan="6" class="lib-group-name">📖 <a href="#/book/${esc(book.bib_id)}" class="table-link">${esc(book.label)}</a></td></tr>`;
+      for (const copy of book.copies) {
+        const rowClass = copy.status === 'Available' ? 'avail-row--green' : (copy.status.includes('DUE') || copy.status.toLowerCase().includes('loan') ? 'avail-row--red' : 'avail-row--gray');
+        html += `<tr class="avail-row ${rowClass}">
+          <td data-col="${esc(t('col_library'))}">${esc(copy.library)}</td>
+          <td data-col="${esc(t('col_type'))}"><small class="media-badge">${esc(copy.media_type)}</small></td>
+          <td data-col="${esc(t('col_callno'))}">${esc(copy.call_number)}</td>
+          <td data-col="${esc(t('col_status'))}">${renderStatusPill(copy.status)}</td>
+          <td data-col="${esc(t('col_reserve'))}">${copy.item_id ? `<button type="button" class="btn-inline-reserve" data-bib="${esc(copy.bib_id)}" data-item="${esc(copy.item_id)}">${esc(t('col_reserve'))}</button>` : '<span class="reserve-na">—</span>'}</td>
+        </tr>`;
       }
     }
     html += '</tbody></table></div>';
@@ -539,17 +557,6 @@ function renderGridResults(data) {
   return html;
 }
 
-function renderLandingTips() {
-  const lang = getLang();
-  return `<div class="landing-tips"><h2 class="tips-title">${esc(t('search_hero'))}</h2>
-    <div class="tips-grid">
-      <div class="tip-card"><div class="tip-icon">🔤</div><h3>${esc(t('st_X'))}</h3><p>${esc(t('tip_keyword_desc'))}</p></div>
-      <div class="tip-card"><div class="tip-icon">📖</div><h3>${esc(t('st_t'))}</h3><p>${esc(t('tip_title_desc'))}</p></div>
-      <div class="tip-card"><div class="tip-icon">✍️</div><h3>${esc(t('st_a'))}</h3><p>${esc(t('tip_author_desc'))}</p></div>
-      <div class="tip-card"><div class="tip-icon">🗂</div><h3>${esc(t('filter_collapse'))}</h3><p>${esc(t('tip_collapse_desc'))}</p></div>
-    </div></div>`;
-}
-
 function renderStatusPill(status) {
   if (status === 'Available') return `<span class="status-pill status-pill--green">✓ ${esc(t('status_available'))}</span>`;
   if (status.includes('DUE')) return `<span class="status-pill status-pill--orange">📅 ${esc(status)}</span>`;
@@ -614,6 +621,18 @@ function bindResultActions() {
     });
   };
   observeSentinels();
+
+  // Collapse sort toggle: switch between by-library and by-book views
+  document.querySelectorAll('.collapse-sort-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const section = btn.closest('.results-section');
+      const sort = btn.dataset.sort;
+      section.querySelectorAll('.collapse-sort-btn').forEach(b => b.classList.toggle('active', b === btn));
+      section.querySelectorAll('.avail-table-wrap[data-view]').forEach(wrap => {
+        wrap.style.display = wrap.dataset.view === sort ? '' : 'none';
+      });
+    });
+  });
 
   document.querySelectorAll('.btn-inline-reserve').forEach(btn => {
     btn.addEventListener('click', async () => {
@@ -720,8 +739,11 @@ async function renderBookDetail(bibId) {
       for (const item of book.availability) {
         const rowClass = item.status === 'Available' ? 'avail-row--green' : (item.status.includes('DUE') || item.status.toLowerCase().includes('loan') ? 'avail-row--red' : 'avail-row--gray');
         html += `<tr class="avail-row ${rowClass}">
-          <td>${esc(item.location)}</td><td>${esc(item.call_number)}</td>
-          <td>${renderStatusPill(item.status)}</td><td>${esc(item.notes)}</td><td>`;
+          <td data-col="${esc(t('col_location'))}">${esc(item.location)}</td>
+          <td data-col="${esc(t('col_callno'))}">${esc(item.call_number)}</td>
+          <td data-col="${esc(t('col_status'))}">${renderStatusPill(item.status)}</td>
+          <td data-col="${esc(t('col_notes'))}">${esc(item.notes)}</td>
+          <td data-col="${esc(t('col_reserve'))}">`;
         if (item.item_id) {
           html += `<button type="button" class="btn-inline-reserve" data-bib="${esc(bibId)}" data-item="${esc(item.item_id)}">${esc(t('col_reserve'))}</button>`;
         } else {
@@ -767,17 +789,17 @@ async function renderAccount() {
         <th>${esc(t('account_col_due'))}</th><th>${esc(t('account_col_renewals'))}</th>
         <th>${esc(t('account_col_callno'))}</th></tr></thead><tbody>`;
       for (const item of items) {
-        html += '<tr><td>';
+        html += `<tr><td data-col="${esc(t('account_col_title'))}">`;
         if (item.bib_id) {
           html += `<a href="#/book/${item.bib_id}" class="table-link">${esc(item.title)}</a>`;
         } else {
           html += esc(item.title);
         }
-        html += `</td><td>${esc(item.barcode)}</td><td>`;
+        html += `</td><td data-col="${esc(t('account_col_barcode'))}">${esc(item.barcode)}</td><td data-col="${esc(t('account_col_due'))}">`;
         if (item.due_date) html += `<span class="status-pill status-pill--orange">📅 ${esc(item.due_date)}</span>`;
         html += '</td><td>';
         html += item.renewed ? `<span class="chip chip--year">${esc(item.renewed)}</span>` : '—';
-        html += `</td><td>${esc(item.call_number)}</td></tr>`;
+        html += `</td><td data-col="${esc(t('account_col_callno'))}">${esc(item.call_number)}</td></tr>`;
       }
       html += '</tbody></table></div>';
     } else {
@@ -793,13 +815,13 @@ async function renderAccount() {
         <th>${esc(t('account_col_pickup'))}</th><th>${esc(t('account_col_cancelby'))}</th><th></th>
         </tr></thead><tbody>`;
       for (const hold of holds) {
-        html += '<tr><td>';
+        html += `<tr><td data-col="${esc(t('account_col_title'))}">` ;
         if (hold.bib_id) {
           html += `<a href="#/book/${hold.bib_id}" class="table-link">${esc(hold.title)}</a>`;
         } else {
           html += esc(hold.title);
         }
-        html += '</td><td>';
+        html += `</td><td data-col="${esc(t('account_col_status'))}">` ;
         if (hold.status.includes('Ready') || hold.status.includes('pick up')) {
           html += `<span class="status-pill status-pill--green">✓ ${esc(hold.status)}</span>`;
         } else if (hold.status.includes('Transit')) {
@@ -807,7 +829,7 @@ async function renderAccount() {
         } else {
           html += `<span class="status-pill status-pill--orange">⏳ ${esc(hold.status)}</span>`;
         }
-        html += `</td><td>${esc(hold.pickup)}</td><td>${esc(hold.cancel_by)}</td><td>`;
+        html += `</td><td data-col="${esc(t('account_col_pickup'))}">${esc(hold.pickup)}</td><td data-col="${esc(t('account_col_cancelby'))}">${esc(hold.cancel_by)}</td><td>`;
         if (hold.hold_id) {
           html += `<button type="button" class="btn-cancel-hold" data-hold="${esc(hold.hold_id)}">${esc(t('account_cancel_hold_btn'))}</button>`;
         }

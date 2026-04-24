@@ -386,6 +386,16 @@ export async function collapseSearch(query, searchType = 'X', scope = '171', sor
   const groupedCopies = Object.entries(grouped);
   console.log(`[aladi] collapseSearch: ${groupedCopies.length} libraries, ${allCopies.length} copies total`);
 
+  // Also group by book (edition_title) for the by-book sort view
+  const byBook = {};
+  for (const copy of allCopies) {
+    const key = copy.bib_id || copy.edition_title;
+    if (!byBook[key]) byBook[key] = { label: copy.edition_title, bib_id: copy.bib_id, copies: [] };
+    byBook[key].copies.push(copy);
+  }
+  // Sort books alphabetically
+  const groupedByBook = Object.values(byBook).sort((a, b) => a.label.localeCompare(b.label));
+
   return {
     query,
     search_type: searchType,
@@ -394,6 +404,7 @@ export async function collapseSearch(query, searchType = 'X', scope = '171', sor
     editions_fetched: books.length,
     copies: allCopies,
     grouped_copies: groupedCopies,
+    grouped_by_book: groupedByBook,
     collapsed: true,
   };
 }
