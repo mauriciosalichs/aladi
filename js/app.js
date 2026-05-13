@@ -1,7 +1,7 @@
 // Aladí Library Portal — SPA Controller
 
 import { t, getLang, setLang, SEARCH_TYPES, SCOPE_GROUPS, SUPPORTED_LANGUAGES, MUNICIPALITIES, LIBRARY_BRANCHES } from './translations.js';
-import { loadConfig, saveConfig, clearSession, isLoggedIn, getProxyUrl } from './config.js';
+import { loadConfig, saveConfig, clearSession, isLoggedIn, getProxyUrl, getSavedCredentials } from './config.js';
 import * as client from './aladi-client.js';
 
 // ── Globals ─────────────────────────────────────────────────────────
@@ -228,6 +228,8 @@ function renderLogin() {
   setTitle(t('login_page_title'));
   renderNav();
 
+  const cfg = loadConfig();
+
   document.getElementById('app-content').innerHTML = `
     <div class="login-wrap">
       <div class="login-card">
@@ -237,11 +239,17 @@ function renderLogin() {
         <form id="login-form" class="login-form">
           <div class="form-group">
             <label for="barcode" class="form-label">${esc(t('login_barcode_label'))}</label>
-            <input type="text" id="barcode" class="form-input" placeholder="${esc(t('login_barcode_placeholder'))}" autocomplete="username" required />
+            <input type="text" id="barcode" class="form-input" placeholder="${esc(t('login_barcode_placeholder'))}" autocomplete="username" required value="${esc(cfg.barcode || '')}" />
           </div>
           <div class="form-group">
             <label for="pin" class="form-label">${esc(t('login_pin_label'))}</label>
             <input type="password" id="pin" class="form-input" placeholder="${esc(t('login_pin_placeholder'))}" autocomplete="current-password" required />
+          </div>
+          <div class="form-group form-group--checkbox">
+            <label class="checkbox-label">
+              <input type="checkbox" id="remember-me" ${cfg.save_credentials ? 'checked' : ''} />
+              ${esc(t('login_remember_me'))}
+            </label>
           </div>
           <button type="submit" class="btn btn--primary btn--full">${esc(t('login_btn'))}</button>
         </form>
@@ -255,6 +263,7 @@ function renderLogin() {
     e.preventDefault();
     const barcode = document.getElementById('barcode').value.trim();
     const pin = document.getElementById('pin').value.trim();
+    const rememberMe = document.getElementById('remember-me').checked;
 
     if (!barcode || !pin) {
       flash(t('flash_missing_fields'), 'danger');
@@ -274,8 +283,17 @@ function renderLogin() {
     try {
       const result = await client.login(barcode, pin);
       if (result) {
+        // Save or clear credentials based on checkbox
+        const cfg2 = loadConfig();
+        saveConfig({
+          ...cfg2,
+          save_credentials: rememberMe,
+          barcode: rememberMe ? barcode : '',
+          pin: rememberMe ? pin : '',
+        });
+
         flash(t('flash_login_success', { name: result.patronName }), 'success');
-        navigate('#/search');
+        navigate('#/account');
       } else {
         flash(t('flash_login_failed'), 'danger');
       }
@@ -1178,7 +1196,7 @@ function route(skipSearch = false) {
 
   // Auth-protected routes
   if (path === '#/login' || path === '#/') {
-    if (isLoggedIn()) { navigate('#/search'); return; }
+    if (isLoggedIn()) { navigate('#/account'); return; }
     renderLogin();
     return;
   }
@@ -1205,6 +1223,31 @@ function route(skipSearch = false) {
 // ── Init ────────────────────────────────────────────────────────────
 
 window.addEventListener('hashchange', () => route());
-window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', async () => {
+  // Try to restore or auto-renew session when saved credentials exist
+  const creds = getSavedCredentials();
+  if (creds && getProxyUrl()) {
+    showLoading();
+    renderNav();
+    try {
+      const alive = await client.restoreSession();
+      if (alive) {
+        // Session still valid — go straight to account
+        navigate('#/account');
+        return;
+      }
+      // Session expired — try silent re-login
+      const result = await client.login(creds.barcode, creds.pin);
+      if (result) {
+        flash(t('flash_auto_login_success', { name: result.patronName }), 'success');
+        navigate('#/account');
+        return;
+      } else {
+        flash(t('flash_auto_login_failed'), 'warning');
+      }
+    } catch (err) {
+      flash(err.message, 'warning');
+    }
+  }
   route();
 });

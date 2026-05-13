@@ -1,0 +1,12 @@
+# Cloudflare Worker — CORS proxy for Aladí
+# Deploy with: npx wrangler deploy
+#
+# First time: run `npx wrangler login` to authenticate with your Cloudflare account.
+# Then: npx wrangler deploy
+
+name = "aladi-proxy"
+main = "proxy-worker.js"
+compatibility_date = "2024-01-01"
+
+# The worker uses the legacy Service Worker API format (addEventListener).
+# No build step needed.

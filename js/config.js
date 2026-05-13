@@ -16,6 +16,8 @@ const DEFAULTS = {
   patron_id: '',
   patron_name: '',
   barcode: '',
+  pin: '',
+  save_credentials: false,
 };
 
 export function loadConfig() {
@@ -41,12 +43,22 @@ export function saveConfig(cfg) {
 
 export function clearSession() {
   const cfg = loadConfig();
+  const keep = cfg.save_credentials ? { barcode: cfg.barcode, pin: cfg.pin } : { barcode: '', pin: '' };
   saveConfig({
     ...cfg,
     session_cookies: {},
     patron_id: '',
     patron_name: '',
+    ...keep,
   });
+}
+
+export function getSavedCredentials() {
+  const cfg = loadConfig();
+  if (cfg.save_credentials && cfg.barcode && cfg.pin) {
+    return { barcode: cfg.barcode, pin: cfg.pin };
+  }
+  return null;
 }
 
 export function isLoggedIn() {

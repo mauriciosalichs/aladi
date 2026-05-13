@@ -224,6 +224,8 @@ img { display: block; max-width: 100%; }
 }
 .login-form { display: flex; flex-direction: column; gap: 1rem; }
 .form-group { display: flex; flex-direction: column; gap: .4rem; }
+.form-group--checkbox { flex-direction: row; align-items: center; }
+.checkbox-label { display: flex; align-items: center; gap: .5rem; cursor: pointer; font-size: .9rem; color: var(--text-secondary, #555); }
 .form-label { font-size: .85rem; font-weight: 600; color: var(--gray-700); }
 .form-input {
   padding: .6rem .85rem;
